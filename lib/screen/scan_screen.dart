@@ -54,7 +54,7 @@ class _ScanScreenState extends State<ScanScreen>
   final FocusNode _focusNode = FocusNode();
   TextEditingController controller = TextEditingController();
   final _mssqlConnection = MssqlConnection.getInstance();
-  String imageBase64 = '';
+  Uint8List? imageBytes;
 
   List<Color> colorList = [
     const Color(0xff2A33B5),
@@ -296,7 +296,7 @@ class _ScanScreenState extends State<ScanScreen>
     _clearProductTimer = Timer(const Duration(seconds: 15), () {
       setState(() {
         productList.clear();
-        imageBase64 = '';
+        imageBytes = null;
       });
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -481,10 +481,15 @@ log("product keycode : ${tempResult.first['keycode']}");
         // mssql_connection v2.0.0 returns a JSON array directly
         final imageResponse = jsonDecode(imageResponseStr) as List? ?? [];
         if (imageResponse.isNotEmpty) {
-          imageBase64 = imageResponse.first["ImageData"] ?? '';
-          log('Image Base64 length: ${imageBase64.length}');
+          final base64String = imageResponse.first["ImageData"] ?? '';
+          if (base64String.isNotEmpty) {
+            imageBytes = base64Decode(base64String);
+            log('Image bytes length: ${imageBytes?.length}');
+          } else {
+            imageBytes = null;
+          }
         } else {
-          imageBase64 = '';
+          imageBytes = null;
         }
       }
     } catch (error) {
@@ -701,10 +706,9 @@ log("product keycode : ${tempResult.first['keycode']}");
                                           child: Container(
                                             height: 320.h,
                                             decoration: BoxDecoration(
-                                              image: imageBase64.isNotEmpty
+                                              image: imageBytes != null
                                                   ? DecorationImage(
-                                                      image: MemoryImage(
-                                                          base64Decode(imageBase64)),
+                                                      image: MemoryImage(imageBytes!),
                                                       filterQuality:
                                                           FilterQuality.high,
                                                       fit: BoxFit.fill,
