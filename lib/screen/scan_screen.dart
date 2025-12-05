@@ -54,7 +54,7 @@ class _ScanScreenState extends State<ScanScreen>
   final FocusNode _focusNode = FocusNode();
   TextEditingController controller = TextEditingController();
   final _mssqlConnection = MssqlConnection.getInstance();
-  String imageUrl = '';
+  String imageBase64 = '';
 
   List<Color> colorList = [
     const Color(0xff2A33B5),
@@ -296,7 +296,7 @@ class _ScanScreenState extends State<ScanScreen>
     _clearProductTimer = Timer(const Duration(seconds: 15), () {
       setState(() {
         productList.clear();
-        imageUrl = '';
+        imageBase64 = '';
       });
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -481,10 +481,10 @@ log("product keycode : ${tempResult.first['keycode']}");
         // mssql_connection v2.0.0 returns a JSON array directly
         final imageResponse = jsonDecode(imageResponseStr) as List? ?? [];
         if (imageResponse.isNotEmpty) {
-          imageUrl = imageResponse.first["ImageData"] ?? '';
-          log('Image URL: $imageUrl');
+          imageBase64 = imageResponse.first["ImageData"] ?? '';
+          log('Image Base64 length: ${imageBase64.length}');
         } else {
-          imageUrl = '';
+          imageBase64 = '';
         }
       }
     } catch (error) {
@@ -701,10 +701,10 @@ log("product keycode : ${tempResult.first['keycode']}");
                                           child: Container(
                                             height: 320.h,
                                             decoration: BoxDecoration(
-                                              image: imageUrl.isNotEmpty
+                                              image: imageBase64.isNotEmpty
                                                   ? DecorationImage(
-                                                      image: NetworkImage(
-                                                          imageUrl),
+                                                      image: MemoryImage(
+                                                          base64Decode(imageBase64)),
                                                       filterQuality:
                                                           FilterQuality.high,
                                                       fit: BoxFit.fill,
