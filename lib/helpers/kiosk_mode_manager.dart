@@ -4,7 +4,8 @@ import 'dart:async';
 import 'dart:developer';
 import 'dart:io';
 
-import 'package:connect_to_sql_server_directly/connect_to_sql_server_directly.dart';
+import 'dart:convert';
+import 'package:mssql_connection/mssql_connection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:network_info_plus/network_info_plus.dart';
@@ -18,7 +19,8 @@ class KioskModeManager {
   static Timer? _popupTimer;
   static bool testSuccess = false; // Flag for successful test connection
 
-  static const MethodChannel platform = MethodChannel('com.eratech.blocks_price_check/kiosk_mode');
+  static const MethodChannel platform =
+      MethodChannel('com.eratech.blocks_price_check/kiosk_mode');
 
   // Function to start Kiosk Mode
   static Future<void> startKioskMode() async {
@@ -50,7 +52,8 @@ class KioskModeManager {
 
     showGeneralDialog(
       context: context,
-      barrierDismissible: false, // Prevent dismissal by tapping outside the dialog
+      barrierDismissible:
+          false, // Prevent dismissal by tapping outside the dialog
       barrierColor: Colors.black.withOpacity(0.5), // Background color
       transitionDuration: const Duration(milliseconds: 300),
       pageBuilder: (context, anim1, anim2) {
@@ -71,11 +74,13 @@ class KioskModeManager {
                 decoration: const InputDecoration(
                   hintText: 'Enter password',
                   border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(vertical: 15, horizontal: 10),
+                  contentPadding:
+                      EdgeInsets.symmetric(vertical: 15, horizontal: 10),
                 ),
                 onChanged: (value) {
                   resetPopupTimeout(context,
-                      duration: const Duration(seconds: 10)); // Reset timer on typing
+                      duration:
+                          const Duration(seconds: 10)); // Reset timer on typing
                 },
                 onSubmitted: (value) async {
                   if (passwordController.text == '1234') {
@@ -124,7 +129,7 @@ class KioskModeManager {
   }
 
   Future<void> showDatabasePopup(BuildContext context) async {
-    final connectToSqlServerDirectlyPlugin = ConnectToSqlServerDirectly();
+    final mssqlConnection = MssqlConnection.getInstance();
     bool connect = false;
 
     TextEditingController serverController = TextEditingController();
@@ -150,13 +155,14 @@ class KioskModeManager {
         log('Server: ${serverController.text}');
         log('Database: ${databaseController.text}');
         log('Username: ${usernameController.text}');
-        
-        connect = await connectToSqlServerDirectlyPlugin.initializeConnection(
-          serverController.text,
-          databaseController.text,
-          usernameController.text,
-          passwordController.text,
-          instance: '',
+
+        connect = await mssqlConnection.connect(
+          ip: serverController.text,
+          port: '1433',
+          databaseName: databaseController.text,
+          username: usernameController.text,
+          password: passwordController.text,
+          timeoutInSeconds: 15,
         );
         log('Initial connection result: $connect');
       } catch (e) {
@@ -174,15 +180,23 @@ class KioskModeManager {
       }
 
       // First try to list all tables to see what's available
-      var tablesResponse = await connectToSqlServerDirectlyPlugin
-          .getRowsOfQueryResult("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'");
+      var tablesResponse = await mssqlConnection.getData(
+          "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'");
       log('Available tables: $tablesResponse');
-      
+
       // Try the Product table query
-      final response = await connectToSqlServerDirectlyPlugin
-          .getRowsOfQueryResult("SELECT TOP 1 * FROM Products;");
+      final response = await mssqlConnection.getData("SELECT TOP 1 * FROM Products;");
       log('Product query response: $response');
-      isConnected = !response.toString().contains('java');
+
+      // Parse the JSON response to check if connection is successful
+      // mssql_connection v2.0.0 returns a JSON array directly, not a Map with 'rows' key
+      try {
+        final decodedResponse = jsonDecode(response);
+        isConnected = decodedResponse is List && decodedResponse.isNotEmpty;
+      } catch (e) {
+        log('Error parsing response: $e');
+        isConnected = false;
+      }
 
       if (context.mounted) {
         if (isConnected) {
@@ -196,7 +210,8 @@ class KioskModeManager {
           // debugNetworkInterfaces();
           // getDeviceIPAddress();
         } else {
-          setState(() {}); // Update the state to keep the Update button disabled
+          setState(
+              () {}); // Update the state to keep the Update button disabled
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Failed to connect to the server'),
@@ -257,10 +272,11 @@ class KioskModeManager {
                           alignment: Alignment.centerRight,
                           child: ElevatedButton(
                             onPressed: () async {
-                              await stopKioskMode();
+                              // await stopKioskMode();
                               Navigator.of(context).pop();
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Kiosk Mode Disabled.')),
+                                const SnackBar(
+                                    content: Text('Kiosk Mode Disabled.')),
                               );
                             },
                             child: const Text('Exit to OS'),
@@ -268,13 +284,17 @@ class KioskModeManager {
                         ),
                         const SizedBox(height: 10),
                         _buildTextField(context,
-                            autofocus: true, controller: serverController, labelText: 'Server *'),
+                            autofocus: true,
+                            controller: serverController,
+                            labelText: 'Server *'),
                         const SizedBox(height: 10),
                         _buildTextField(context,
-                            controller: databaseController, labelText: 'Database *'),
+                            controller: databaseController,
+                            labelText: 'Database *'),
                         const SizedBox(height: 10),
                         _buildTextField(context,
-                            controller: usernameController, labelText: 'Username *'),
+                            controller: usernameController,
+                            labelText: 'Username *'),
                         const SizedBox(height: 10),
                         _buildTextField(context,
                             controller: passwordController,
@@ -303,17 +323,20 @@ class KioskModeManager {
                         if (proceed) {
                           Navigator.of(context).pop(); // Close the dialog
                           final prefs = await SharedPreferences.getInstance();
-                          await prefs.clear(); // Clear the preferences on cancel
+                          await prefs
+                              .clear(); // Clear the preferences on cancel
                           testConnection(context, setState);
                           // connectionProvider.updateConnectionStatus(
                           //     false, context); // Update the connection status to false
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                                content: Text('Connection lost'), backgroundColor: Colors.red),
+                                content: Text('Connection lost'),
+                                backgroundColor: Colors.red),
                           );
                         }
                       } else {
-                        Navigator.of(context).pop(); // Close the dialog without warning
+                        Navigator.of(context)
+                            .pop(); // Close the dialog without warning
                       }
                     },
                   ),
@@ -321,8 +344,12 @@ class KioskModeManager {
                     onPressed: connect
                         ? () async {
                             // Save connection data and update settings
-                            await _handleUpdate(context, serverController, databaseController,
-                                usernameController, passwordController);
+                            await _handleUpdate(
+                                context,
+                                serverController,
+                                databaseController,
+                                usernameController,
+                                passwordController);
                           }
                         : null, // Disable if not connected
                     child: const Text('Update'),
@@ -348,7 +375,8 @@ class KioskModeManager {
       decoration: InputDecoration(
         labelText: labelText,
         border: const OutlineInputBorder(),
-        contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 10),
+        contentPadding:
+            const EdgeInsets.symmetric(vertical: 15, horizontal: 10),
       ),
     );
   }
@@ -381,7 +409,8 @@ class KioskModeManager {
   }
 
 // Timer to automatically close popups after a specified duration
-  static void startPopupTimeout(BuildContext context, {required Duration duration}) {
+  static void startPopupTimeout(BuildContext context,
+      {required Duration duration}) {
     _popupTimer?.cancel(); // Cancel any existing timer
 
     _popupTimer = Timer(duration, () {
@@ -396,8 +425,10 @@ class KioskModeManager {
   }
 
   // Reset the popup timeout
-  static void resetPopupTimeout(BuildContext context, {required Duration duration}) {
+  static void resetPopupTimeout(BuildContext context,
+      {required Duration duration}) {
     _popupTimer?.cancel(); // Cancel the current timer
-    startPopupTimeout(context, duration: duration); // Restart the timer with the same duration
+    startPopupTimeout(context,
+        duration: duration); // Restart the timer with the same duration
   }
 }

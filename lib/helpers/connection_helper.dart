@@ -2,15 +2,16 @@
 
 import 'dart:developer';
 
+import 'dart:convert';
+
 import 'package:blocks_guide/helpers/connection_provider.dart';
-import 'package:connect_to_sql_server_directly/connect_to_sql_server_directly.dart';
+import 'package:mssql_connection/mssql_connection.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ConnectionHelper {
-  Future<void> checkInitialConnection(ConnectionProvider connectionProvider) async {
+  Future<void> checkInitialConnection(
+      ConnectionProvider connectionProvider) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     log('checkInitialConnection started');
     bool isConnected = false;
@@ -25,19 +26,36 @@ class ConnectionHelper {
       final password = prefs.getString('password')!;
 
       try {
-        final connectToSqlServerDirectlyPlugin = ConnectToSqlServerDirectly();
-        final response = await connectToSqlServerDirectlyPlugin
-            .getRowsOfQueryResult("SELECT TOP 1 * FROM Products;");
-        isConnected = !response.toString().contains('java');
+        final mssqlConnection = MssqlConnection.getInstance();
 
-        log('Database connection initialized: $isConnected');
+        // First connect to the database
+        bool connected = await mssqlConnection.connect(
+          ip: serverIp,
+          port: '1433',
+          databaseName: database,
+          username: username,
+          password: password,
+          timeoutInSeconds: 15,
+        );
 
-        if (isConnected) {
-          log('successfully connect to the database');
+        if (connected) {
+          // Test connection by querying the Products table
+          // mssql_connection v2.0.0 returns a JSON array directly, not a Map with 'rows' key
+          final response = await mssqlConnection.getData("SELECT TOP 1 * FROM Products;");
+          final decodedResponse = jsonDecode(response);
+          isConnected = decodedResponse is List && decodedResponse.isNotEmpty;
 
-          connectionProvider.updateConnectionStatus(true);
+          log('Database connection initialized: $isConnected');
+
+          if (isConnected) {
+            log('successfully connect to the database');
+            connectionProvider.updateConnectionStatus(true);
+          } else {
+            log('Failed to connect to the database');
+            connectionProvider.updateConnectionStatus(false);
+          }
         } else {
-          log('Failed to connect to the database');
+          log('Failed to establish connection');
           connectionProvider.updateConnectionStatus(false);
         }
       } catch (e) {
