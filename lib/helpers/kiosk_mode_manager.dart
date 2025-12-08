@@ -272,7 +272,7 @@ class KioskModeManager {
                           alignment: Alignment.centerRight,
                           child: ElevatedButton(
                             onPressed: () async {
-                              // await stopKioskMode();
+                               await stopKioskMode();
                               Navigator.of(context).pop();
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
