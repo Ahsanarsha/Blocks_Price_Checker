@@ -79,21 +79,7 @@ class _ScanScreenState extends State<ScanScreen>
   /// Handle app lifecycle changes
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      // Start kiosk mode when app resumes from minimize
-      _launchAppOnBoot();
-    }
-  }
-
-  /// Start kiosk mode
-  Future<void> _launchAppOnBoot() async {
-    await KioskModeManager.startKioskMode();
-    try {
-      var result = await platform.invokeMethod('startKioskMode');
-      log(result.toString());
-    } on PlatformException catch (e) {
-      log("Failed to invoke kiosk mode: '${e.message}'.");
-    }
+    // Kiosk mode is now controlled manually via buttons in the settings popup
   }
 
   /// Check if current date is within date range

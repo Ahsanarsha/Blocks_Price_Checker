@@ -268,19 +268,45 @@ class KioskModeManager {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: ElevatedButton(
-                            onPressed: () async {
-                               await stopKioskMode();
-                              Navigator.of(context).pop();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text('Kiosk Mode Disabled.')),
-                              );
-                            },
-                            child: const Text('Exit to OS'),
-                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                foregroundColor: Colors.white,
+                              ),
+                              onPressed: () async {
+                                await startKioskMode();
+                                Navigator.of(context).pop();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Kiosk Mode Enabled.'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              },
+                              child: const Text('Enable Kiosk'),
+                            ),
+                            const SizedBox(width: 10),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                foregroundColor: Colors.white,
+                              ),
+                              onPressed: () async {
+                                await stopKioskMode();
+                                Navigator.of(context).pop();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Kiosk Mode Disabled.'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              },
+                              child: const Text('Exit to OS'),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 10),
                         _buildTextField(context,
