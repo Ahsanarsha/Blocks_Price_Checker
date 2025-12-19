@@ -55,6 +55,8 @@ class _ScanScreenState extends State<ScanScreen>
   TextEditingController controller = TextEditingController();
   final _mssqlConnection = MssqlConnection.getInstance();
   Uint8List? imageBytes;
+  bool _showKeyboard = false; // Controls whether keyboard should be shown
+  String _scanBuffer = ''; // Buffer to collect scanner input
 
   List<Color> colorList = [
     const Color(0xff2A33B5),
@@ -222,11 +224,6 @@ class _ScanScreenState extends State<ScanScreen>
       });
     });
 
-    _focusNode.addListener(() {
-      if (_focusNode.hasFocus) {
-        SystemChannels.textInput.invokeMethod('TextInput.hide');
-      }
-    });
 
     // Zoom In/Out Animation
     _scaleController = AnimationController(
@@ -257,9 +254,6 @@ class _ScanScreenState extends State<ScanScreen>
     });
 
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      FocusScope.of(context).requestFocus(_focusNode);
-    });
   }
 
   @override
@@ -621,36 +615,82 @@ log("product keycode : ${tempResult.first['keycode']}");
                   SizedBox(
                     width: MediaQuery.of(context).size.width / 0.5.w,
                     height: 60.h,
-                    child: TextFormField(
-                      style: const TextStyle(color: Colors.white),
-                      autofocus: true,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      controller: controller,
+                    child: KeyboardListener(
                       focusNode: _focusNode,
-                      onFieldSubmitted: (value) {
-                        log('item mixmatch : $value');
-                        getProductsTableData(value);
+                      autofocus: true,
+                      onKeyEvent: (KeyEvent event) {
+                        // Only handle when keyboard is hidden (scanner mode)
+                        if (!_showKeyboard && event is KeyDownEvent) {
+                          final key = event.logicalKey;
 
-                        _focusNode.requestFocus();
+                          // Check if Enter key is pressed (scanner sends Enter after barcode)
+                          if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.numpadEnter) {
+                            if (_scanBuffer.isNotEmpty) {
+                              log('Scanner input: $_scanBuffer');
+                              controller.text = _scanBuffer;
+                              getProductsTableData(_scanBuffer);
+                              _scanBuffer = '';
+                            }
+                          } else {
+                            // Collect digit characters from scanner
+                            final keyLabel = event.character;
+                            if (keyLabel != null && RegExp(r'[0-9]').hasMatch(keyLabel)) {
+                              _scanBuffer += keyLabel;
+                              controller.text = _scanBuffer;
+                            }
+                          }
+                        }
                       },
-                      decoration: InputDecoration(
-                        labelText: 'Scan Your Product',
-                        labelStyle: TextStyle(
-                          fontSize: 7.sp,
-                          color:
-                              _focusNode.hasFocus ? Colors.white : Colors.grey,
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderSide: BorderSide(
-                            color: Colors.amberAccent,
-                            width: 1.0.w,
+                      child: TextFormField(
+                        style: const TextStyle(color: Colors.white),
+                        autofocus: false,
+                        readOnly: !_showKeyboard, // Only allow keyboard when _showKeyboard is true
+                        showCursor: true,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        controller: controller,
+                        onTap: () {
+                          // Show keyboard when user manually taps the field
+                          setState(() {
+                            _showKeyboard = true;
+                          });
+                        },
+                        onFieldSubmitted: (value) {
+                          if (value.trim().isNotEmpty) {
+                            log('Searching for: $value');
+                            getProductsTableData(value);
+                          }
+                          // Hide keyboard and keep focus for scanner
+                          setState(() {
+                            _showKeyboard = false;
+                          });
+                          controller.clear();
+                          _scanBuffer = '';
+                          // Re-focus for scanner input after keyboard closes
+                          Future.delayed(const Duration(milliseconds: 100), () {
+                            if (mounted) {
+                              _focusNode.requestFocus();
+                            }
+                          });
+                        },
+                        decoration: InputDecoration(
+                          labelText: 'Scan Your Product',
+                          labelStyle: TextStyle(
+                            fontSize: 7.sp,
+                            color:
+                                _focusNode.hasFocus ? Colors.white : Colors.grey,
                           ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderSide: BorderSide(
-                            color: Colors.grey,
-                            width: 1.0.w,
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(
+                              color: Colors.amberAccent,
+                              width: 1.0.w,
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderSide: BorderSide(
+                              color: Colors.grey,
+                              width: 1.0.w,
+                            ),
                           ),
                         ),
                       ),

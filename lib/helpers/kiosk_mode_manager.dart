@@ -304,7 +304,7 @@ class KioskModeManager {
                                   ),
                                 );
                               },
-                              child: const Text('Exit to OS'),
+                              child: const Text('Disable KIOSK'),
                             ),
                           ],
                         ),
