@@ -351,9 +351,10 @@ class KioskModeManager {
                           final prefs = await SharedPreferences.getInstance();
                           await prefs
                               .clear(); // Clear the preferences on cancel
-                          testConnection(context, setState);
-                          // connectionProvider.updateConnectionStatus(
-                          //     false, context); // Update the connection status to false
+                          // Update the connection status to false
+                          Provider.of<ConnectionProvider>(context,
+                                  listen: false)
+                              .updateConnectionStatus(false);
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                                 content: Text('Connection lost'),

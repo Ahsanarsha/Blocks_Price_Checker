@@ -245,6 +245,11 @@ class _ScanScreenState extends State<ScanScreen>
       end: Colors.red,
     ).animate(_colorController);
 
+    // Check database connection on app start
+    final connectionProvider =
+        Provider.of<ConnectionProvider>(context, listen: false);
+    ConnectionHelper().checkInitialConnection(connectionProvider);
+
     // Check database connection every minute
     _timer = Timer.periodic(const Duration(minutes: 1), (timer) async {
       final connectionProvider =
@@ -292,6 +297,14 @@ class _ScanScreenState extends State<ScanScreen>
   }
 
   Future<void> getProductsTableData(String text) async {
+    // Check if database is connected before proceeding
+    final connectionProvider =
+        Provider.of<ConnectionProvider>(context, listen: false);
+    if (!connectionProvider.isConnected) {
+      showBottomSnackBar('Please connect to the database first.');
+      return;
+    }
+
     setState(() {
       isLoading = true;
       // controller.text = '';
