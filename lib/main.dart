@@ -21,7 +21,7 @@ void main() async {
       ],
       child: ScreenUtilInit(
         designSize: const Size(1280, 752),
-        minTextAdapt: true,
+        minTextAdapt: true, 
         splitScreenMode: true,
         builder: (ctx, child) {
           ScreenUtil.init(ctx);

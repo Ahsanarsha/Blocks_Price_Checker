@@ -1,13 +1,13 @@
 // ignore_for_file: deprecated_member_use
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:developer';
 
 import 'package:blocks_guide/helpers/connection_helper.dart';
 import 'package:blocks_guide/helpers/connection_provider.dart';
 import 'package:blocks_guide/helpers/kiosk_mode_manager.dart';
-import 'dart:convert';
-import 'package:mssql_connection/mssql_connection.dart';
+import 'package:connect_to_sql_server_directly/connect_to_sql_server_directly.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -53,7 +53,7 @@ class _ScanScreenState extends State<ScanScreen>
   bool isLoading = false;
   final FocusNode _focusNode = FocusNode();
   TextEditingController controller = TextEditingController();
-  final _mssqlConnection = MssqlConnection.getInstance();
+  final _sqlConnection = ConnectToSqlServerDirectly();
   Uint8List? imageBytes;
   bool _showKeyboard = false; // Controls whether keyboard should be shown
   String _scanBuffer = ''; // Buffer to collect scanner input
@@ -124,17 +124,15 @@ class _ScanScreenState extends State<ScanScreen>
       log('Before query execution');
 
       // Query to get mix and match details for the product
-      final responseStr = await _mssqlConnection.getData("""
+      final response = await _sqlConnection.getRowsOfQueryResult("""
         SELECT MAM.Name
         FROM MixMatch MAM
         INNER JOIN MixMatchProduct MAMP ON MAM.keycode = MAMP.MixMatchkeycode
         WHERE MAMP.Productkeycode = '$productId'
           AND MAM.IsActiveRecord = '1'
           AND ((MAM.IsLimitedDates = '1' AND GETDATE() BETWEEN MAM.StartDate AND MAM.EndDate) OR MAM.IsLimitedDates = '0')
-          AND ((MAM.IsTimeRestricted = '1' AND GETDATE() BETWEEN MAM.StartTime AND MAM.EndTime) OR MAM.IsTimeRestricted = '0');
-      """);
-      // mssql_connection v2.0.0 returns a JSON array directly, not a Map with 'rows' key
-      final response = jsonDecode(responseStr) as List? ?? [];
+          AND ((MAM.IsTimeRestricted = '1' AND GETDATE() BETWEEN MAM.StartTime AND MAM.EndTime) OR MAM.IsTimeRestricted = '0')
+      """) as List? ?? [];
 
 /*
 // SELECT
@@ -335,10 +333,8 @@ class _ScanScreenState extends State<ScanScreen>
           prefs.getString('database') != null &&
           prefs.getString('userName') != null &&
           prefs.getString('password') != null) {
-        final tablesStr = await _mssqlConnection
-            .getData('SELECT * FROM INFORMATION_SCHEMA.TABLES');
-        // mssql_connection v2.0.0 returns a JSON array directly
-        final tables = jsonDecode(tablesStr) as List? ?? [];
+        final tables = await _sqlConnection
+            .getRowsOfQueryResult('SELECT * FROM INFORMATION_SCHEMA.TABLES') as List? ?? [];
 
         log('Tables>>> $tables');
 
@@ -389,18 +385,16 @@ class _ScanScreenState extends State<ScanScreen>
       log('Today Date: $today');
 
       // Query to get basic product data
-      final productResponseStr = await _mssqlConnection.getData("""
+      final productResponse = await _sqlConnection.getRowsOfQueryResult("""
         SELECT keycode, ProductName, RetailPrice, ProductNature, TaxNonTax, EBTEligible, WeightItem, LoyaltyPoint
         FROM Products
         WHERE keycode IN (SELECT Productkeycode FROM ProductSKUs WHERE ProductSKU = '$text');
         """);
       log('Query text: $text');
-      log('Product response: $productResponseStr');
+      log('Product response: $productResponse');
 
-      // mssql_connection v2.0.0 returns a JSON array directly
-      final productResponse = jsonDecode(productResponseStr);
       if (productResponse is! List) {
-        showBottomSnackBar(productResponseStr);
+        showBottomSnackBar('Failed to fetch product data');
       } else {
         List<Map<String, dynamic>> tempResult =
             productResponse.cast<Map<String, dynamic>>();
@@ -419,12 +413,10 @@ class _ScanScreenState extends State<ScanScreen>
       }
 
       // Now we fetch any special price that applies
-      final specialPriceStr = await _mssqlConnection.getData("""
+      final specialPriceResponse = await _sqlConnection.getRowsOfQueryResult("""
 SELECT keycode, SpecialPrice FROM Products WHERE keycode = (select Productkeycode from ProductSKUs where ProductSKU = '$text')
 AND CONVERT(DATE, GETDATE()) BETWEEN CONVERT(DATE, StartDate) AND CONVERT(DATE, EndDate) AND OnSpecial = 1
-""");
-      // mssql_connection v2.0.0 returns a JSON array directly
-      final specialPriceResponse = jsonDecode(specialPriceStr) as List? ?? [];
+""") as List? ?? [];
 
 /** 
  * SELECT Id, special_price
@@ -466,18 +458,20 @@ WHERE
             productResponse.cast<Map<String, dynamic>>();
         // Fetch product image if found
 log("product keycode : ${tempResult.first['keycode']}");
-        final imageResponseStr = await _mssqlConnection.getData(
-          "select ImageData from Products where keycode = ${tempResult.first['keycode']}",
-        );
-        log('Image Response:    $imageResponseStr');
-
-        // mssql_connection v2.0.0 returns a JSON array directly
-        final imageResponse = jsonDecode(imageResponseStr) as List? ?? [];
+        final imageResponse = await _sqlConnection.getRowsOfQueryResult(
+          "select CAST(N'' AS XML).value('xs:base64Binary(xs:hexBinary(sql:column(\"ImageHex\")))', 'VARCHAR(MAX)') AS ImageData from (select CONVERT(VARCHAR(MAX), ImageData, 2) AS ImageHex from Products where keycode = ${tempResult.first['keycode']}) AS T",
+        ) as List? ?? [];
+        log('Image Response:    $imageResponse');
         if (imageResponse.isNotEmpty) {
           final base64String = imageResponse.first["ImageData"] ?? '';
           if (base64String.isNotEmpty) {
-            imageBytes = base64Decode(base64String);
-            log('Image bytes length: ${imageBytes?.length}');
+            try {
+              imageBytes = base64Decode(base64String);
+              log('Image bytes length: ${imageBytes?.length}');
+            } catch (e) {
+              log('Failed to decode image: $e');
+              imageBytes = null;
+            }
           } else {
             imageBytes = null;
           }

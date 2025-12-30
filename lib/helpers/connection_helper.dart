@@ -2,19 +2,28 @@
 
 import 'dart:developer';
 
-import 'dart:convert';
-
 import 'package:blocks_guide/helpers/connection_provider.dart';
-import 'package:mssql_connection/mssql_connection.dart';
+import 'package:connect_to_sql_server_directly/connect_to_sql_server_directly.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ConnectionHelper {
   Future<void> checkInitialConnection(
       ConnectionProvider connectionProvider) async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
     log('checkInitialConnection started');
     bool isConnected = false;
+
+    // Add a small delay to ensure Flutter engine is ready in release mode
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    SharedPreferences? prefs;
+    try {
+      prefs = await SharedPreferences.getInstance();
+    } catch (e) {
+      log('Error initializing SharedPreferences: $e');
+      connectionProvider.updateConnectionStatus(false);
+      return;
+    }
 
     if (prefs.containsKey('serverIp') &&
         prefs.containsKey('database') &&
@@ -26,24 +35,23 @@ class ConnectionHelper {
       final password = prefs.getString('password')!;
 
       try {
-        final mssqlConnection = MssqlConnection.getInstance();
+        final sqlConnection = ConnectToSqlServerDirectly();
 
-        // First connect to the database
-        bool connected = await mssqlConnection.connect(
-          ip: serverIp,
-          port: '1433',
-          databaseName: database,
-          username: username,
-          password: password,
-          timeoutInSeconds: 15,
+        // First initialize connection
+        bool connected = await sqlConnection.initializeConnection(
+          serverIp,
+          database,
+          username,
+          password,
         );
 
         if (connected) {
           // Test connection by querying the Products table
-          // mssql_connection v2.0.0 returns a JSON array directly, not a Map with 'rows' key
-          final response = await mssqlConnection.getData("SELECT TOP 1 * FROM Products;");
-          final decodedResponse = jsonDecode(response);
-          isConnected = decodedResponse is List && decodedResponse.isNotEmpty;
+          var response = await sqlConnection.getRowsOfQueryResult(
+            "SELECT TOP 1 * FROM Products",
+          );
+
+          isConnected = response != null && response is List && response.isNotEmpty;
 
           log('Database connection initialized: $isConnected');
 

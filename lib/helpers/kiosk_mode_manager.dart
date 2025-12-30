@@ -2,13 +2,10 @@
 
 import 'dart:async';
 import 'dart:developer';
-import 'dart:io';
 
-import 'dart:convert';
-import 'package:mssql_connection/mssql_connection.dart';
+import 'package:connect_to_sql_server_directly/connect_to_sql_server_directly.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:network_info_plus/network_info_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -129,7 +126,7 @@ class KioskModeManager {
   }
 
   Future<void> showDatabasePopup(BuildContext context) async {
-    final mssqlConnection = MssqlConnection.getInstance();
+    final sqlConnection = ConnectToSqlServerDirectly();
     bool connect = false;
 
     TextEditingController serverController = TextEditingController();
@@ -140,11 +137,16 @@ class KioskModeManager {
     // final connectionProvider = context.read<ConnectionProvider>();
 
     // Load saved preferences and display them in the text fields
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    serverController.text = prefs.getString('serverIp') ?? '';
-    databaseController.text = prefs.getString('database') ?? '';
-    usernameController.text = prefs.getString('userName') ?? '';
-    passwordController.text = prefs.getString('password') ?? '';
+    SharedPreferences? prefs;
+    try {
+      prefs = await SharedPreferences.getInstance();
+      serverController.text = prefs.getString('serverIp') ?? '';
+      databaseController.text = prefs.getString('database') ?? '';
+      usernameController.text = prefs.getString('userName') ?? '';
+      passwordController.text = prefs.getString('password') ?? '';
+    } catch (e) {
+      log('Error loading SharedPreferences: $e');
+    }
 
     // Function to test connection
     Future<bool> testConnection(BuildContext context, Function setState) async {
@@ -156,13 +158,11 @@ class KioskModeManager {
         log('Database: ${databaseController.text}');
         log('Username: ${usernameController.text}');
 
-        connect = await mssqlConnection.connect(
-          ip: serverController.text,
-          port: '1433',
-          databaseName: databaseController.text,
-          username: usernameController.text,
-          password: passwordController.text,
-          timeoutInSeconds: 15,
+        connect = await sqlConnection.initializeConnection(
+          serverController.text,
+          databaseController.text,
+          usernameController.text,
+          passwordController.text,
         );
         log('Initial connection result: $connect');
       } catch (e) {
@@ -179,23 +179,18 @@ class KioskModeManager {
         return false; // Return false if connection fails
       }
 
-      // First try to list all tables to see what's available
-      var tablesResponse = await mssqlConnection.getData(
-          "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'");
-      log('Available tables: $tablesResponse');
+      if (connect) {
+        // First try to list all tables to see what's available
+        var tablesResponse = await sqlConnection.getRowsOfQueryResult(
+            "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'");
+        log('Available tables: $tablesResponse');
 
-      // Try the Product table query
-      final response = await mssqlConnection.getData("SELECT TOP 1 * FROM Products;");
-      log('Product query response: $response');
+        // Try the Product table query
+        var response = await sqlConnection.getRowsOfQueryResult("SELECT TOP 1 * FROM Products");
+        log('Product query response: $response');
 
-      // Parse the JSON response to check if connection is successful
-      // mssql_connection v2.0.0 returns a JSON array directly, not a Map with 'rows' key
-      try {
-        final decodedResponse = jsonDecode(response);
-        isConnected = decodedResponse is List && decodedResponse.isNotEmpty;
-      } catch (e) {
-        log('Error parsing response: $e');
-        isConnected = false;
+        // Check if connection is successful
+        isConnected = response != null && response is List && response.isNotEmpty;
       }
 
       if (context.mounted) {
@@ -207,8 +202,6 @@ class KioskModeManager {
               backgroundColor: Colors.green,
             ),
           );
-          // debugNetworkInterfaces();
-          // getDeviceIPAddress();
         } else {
           setState(
               () {}); // Update the state to keep the Update button disabled
