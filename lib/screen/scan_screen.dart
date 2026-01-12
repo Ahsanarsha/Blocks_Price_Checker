@@ -65,7 +65,7 @@ class _ScanScreenState extends State<ScanScreen>
   // Current app build number - update this when releasing new versions
   static const int _currentBuildNumber = 8;
   String? _latestApkPath; // Store the APK path for update
-
+  String domainUrl = "http://192.168.1.12:45457";
   List<Color> colorList = [
     const Color(0xff2A33B5),
     const Color(0xff5A1C88),
@@ -308,7 +308,7 @@ class _ScanScreenState extends State<ScanScreen>
       final response = await http
           .get(
             Uri.parse(
-                'http://192.168.1.12:45457/api/v1/MobileBuildInfo/Application?app=1'),
+                '$domainUrl/api/v1/MobileBuildInfo/Application?app=1'),
           )
           .timeout(const Duration(seconds: 10));
 
@@ -361,13 +361,13 @@ class _ScanScreenState extends State<ScanScreen>
       );
 
       // Download APK
-      final downloadUrl = 'http://192.168.1.12:45457/api/v1/MobileBuildInfo/Download?path=$_latestApkPath';
+      final downloadUrl = '$domainUrl/api/v1/MobileBuildInfo/Download?path=$_latestApkPath';
       log('Downloading APK from: $downloadUrl');
 
       final response = await http.get(Uri.parse(downloadUrl)).timeout(
         const Duration(minutes: 5),
       );
-      
+
       if (response.statusCode == 200) {
         // Save APK to temporary directory
         final tempDir = await getTemporaryDirectory();
@@ -378,6 +378,13 @@ class _ScanScreenState extends State<ScanScreen>
 
         // Close downloading dialog
         if (mounted) Navigator.pop(context);
+
+        // Disable kiosk mode before opening APK installer
+        log('Disabling kiosk mode before APK installation...');
+        await KioskModeManager.stopKioskMode();
+
+        // Small delay to ensure kiosk mode is fully disabled
+        await Future.delayed(const Duration(milliseconds: 500));
 
         // Install APK
         final result = await OpenFilex.open(apkFile.path);
