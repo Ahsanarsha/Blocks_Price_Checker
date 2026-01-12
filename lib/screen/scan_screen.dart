@@ -15,6 +15,10 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:open_filex/open_filex.dart';
+import 'dart:io';
 
 class ScanScreen extends StatefulWidget {
   const ScanScreen({super.key});
@@ -57,6 +61,10 @@ class _ScanScreenState extends State<ScanScreen>
   Uint8List? imageBytes;
   bool _showKeyboard = false; // Controls whether keyboard should be shown
   String _scanBuffer = ''; // Buffer to collect scanner input
+
+  // Current app build number - update this when releasing new versions
+  static const int _currentBuildNumber = 8;
+  String? _latestApkPath; // Store the APK path for update
 
   List<Color> colorList = [
     const Color(0xff2A33B5),
@@ -222,7 +230,6 @@ class _ScanScreenState extends State<ScanScreen>
       });
     });
 
-
     // Zoom In/Out Animation
     _scaleController = AnimationController(
       duration: const Duration(seconds: 1),
@@ -294,6 +301,184 @@ class _ScanScreenState extends State<ScanScreen>
     });
   }
 
+  /// Check if app version is valid by calling the API
+  /// Returns true if version is valid (can proceed), false if update is required
+  Future<bool> _checkAppVersion() async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse(
+                'http://192.168.1.12:45457/api/v1/MobileBuildInfo/Application?app=1'),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] != null) {
+          final int serverBuildNumber = data['data']['mobileBuildNumber'] ?? 0;
+          _latestApkPath = data['data']['apkPath'];
+
+          log('Server build number: $serverBuildNumber, Current build number: $_currentBuildNumber');
+
+          if (serverBuildNumber > _currentBuildNumber) {
+            // Update required - show modal
+            _showUpdateRequiredModal();
+            return false;
+          }
+        }
+      }
+      return true; // Version is valid or API failed (allow app to work)
+    } catch (e) {
+      log('Error checking app version: $e');
+      return true; // On error, allow app to continue working
+    }
+  }
+
+  /// Download and install APK update
+  Future<void> _downloadAndInstallApk() async {
+    if (_latestApkPath == null) {
+      showBottomSnackBar('Update path not available');
+      return;
+    }
+
+    try {
+      // Show downloading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => WillPopScope(
+          onWillPop: () async => false,
+          child: const AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 20),
+                Text('Downloading update...'),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      // Download APK
+      final downloadUrl = 'http://192.168.1.12:45457/api/v1/MobileBuildInfo/Download?path=$_latestApkPath';
+      log('Downloading APK from: $downloadUrl');
+
+      final response = await http.get(Uri.parse(downloadUrl)).timeout(
+        const Duration(minutes: 5),
+      );
+      
+      if (response.statusCode == 200) {
+        // Save APK to temporary directory
+        final tempDir = await getTemporaryDirectory();
+        final apkFile = File('${tempDir.path}/app_update.apk');
+        await apkFile.writeAsBytes(response.bodyBytes);
+
+        log('APK saved to: ${apkFile.path}');
+
+        // Close downloading dialog
+        if (mounted) Navigator.pop(context);
+
+        // Install APK
+        final result = await OpenFilex.open(apkFile.path);
+        log('Open file result: ${result.type} - ${result.message}');
+
+        if (result.type != ResultType.done) {
+          showBottomSnackBar('Failed to open installer: ${result.message}');
+        }
+      } else {
+        // Close downloading dialog
+        if (mounted) Navigator.pop(context);
+        showBottomSnackBar('Failed to download update: ${response.statusCode}');
+      }
+    } catch (e) {
+      log('Error downloading/installing APK: $e');
+      // Close downloading dialog if open
+      if (mounted) Navigator.pop(context);
+      showBottomSnackBar('Error updating app: $e');
+    }
+  }
+
+  /// Show modal bottom sheet when update is required
+  void _showUpdateRequiredModal() {
+    showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
+      ),
+      builder: (context) {
+        return WillPopScope(
+          onWillPop: () async => false,
+          child: Padding(
+            padding: EdgeInsets.all(24.r),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.system_update,
+                  size: 28.sp,
+                  color: Colors.orange,
+                ),
+                SizedBox(height: 8.h),
+                const Text(
+                  'Update Required',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
+                ),
+                SizedBox(height: 8.h),
+                Text(
+                  'This version is outdated. Please install the latest version to continue using the app.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.grey[700],
+                  ),
+                ),
+                SizedBox(height: 10.h),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      padding: EdgeInsets.symmetric(vertical: 14.h),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10.r),
+                      ),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _downloadAndInstallApk();
+                    },
+                    child: const Text(
+                      'Update Now',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 8.h),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Wrapper function to check version before fetching product data
+  Future<void> _fetchProductWithVersionCheck(String text) async {
+    final isVersionValid = await _checkAppVersion();
+    if (isVersionValid) {
+      getProductsTableData(text);
+    }
+  }
+
   Future<void> getProductsTableData(String text) async {
     // Check if database is connected before proceeding
     final connectionProvider =
@@ -333,8 +518,9 @@ class _ScanScreenState extends State<ScanScreen>
           prefs.getString('database') != null &&
           prefs.getString('userName') != null &&
           prefs.getString('password') != null) {
-        final tables = await _sqlConnection
-            .getRowsOfQueryResult('SELECT * FROM INFORMATION_SCHEMA.TABLES') as List? ?? [];
+        final tables = await _sqlConnection.getRowsOfQueryResult(
+                'SELECT * FROM INFORMATION_SCHEMA.TABLES') as List? ??
+            [];
 
         log('Tables>>> $tables');
 
@@ -453,14 +639,14 @@ WHERE
       if (productList.isEmpty) {
         showBottomSnackBar('No product found');
       } else {
-        
-      List<Map<String, dynamic>> tempResult =
+        List<Map<String, dynamic>> tempResult =
             productResponse.cast<Map<String, dynamic>>();
         // Fetch product image if found
-log("product keycode : ${tempResult.first['keycode']}");
+        log("product keycode : ${tempResult.first['keycode']}");
         final imageResponse = await _sqlConnection.getRowsOfQueryResult(
-          "select CAST(N'' AS XML).value('xs:base64Binary(xs:hexBinary(sql:column(\"ImageHex\")))', 'VARCHAR(MAX)') AS ImageData from (select CONVERT(VARCHAR(MAX), ImageData, 2) AS ImageHex from Products where keycode = ${tempResult.first['keycode']}) AS T",
-        ) as List? ?? [];
+              "select CAST(N'' AS XML).value('xs:base64Binary(xs:hexBinary(sql:column(\"ImageHex\")))', 'VARCHAR(MAX)') AS ImageData from (select CONVERT(VARCHAR(MAX), ImageData, 2) AS ImageHex from Products where keycode = ${tempResult.first['keycode']}) AS T",
+            ) as List? ??
+            [];
         log('Image Response:    $imageResponse');
         if (imageResponse.isNotEmpty) {
           final base64String = imageResponse.first["ImageData"] ?? '';
@@ -631,17 +817,22 @@ log("product keycode : ${tempResult.first['keycode']}");
                           final key = event.logicalKey;
 
                           // Check if Enter key is pressed (scanner sends Enter after barcode)
-                          if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.numpadEnter) {
+                          if (key == LogicalKeyboardKey.enter ||
+                              key == LogicalKeyboardKey.numpadEnter) {
                             if (_scanBuffer.isNotEmpty) {
                               log('Scanner input: $_scanBuffer');
                               controller.text = _scanBuffer;
-                              getProductsTableData(_scanBuffer);
+
+                              // Check version before fetching product data
+                              _fetchProductWithVersionCheck(_scanBuffer);
+
                               _scanBuffer = '';
                             }
                           } else {
                             // Collect digit characters from scanner
                             final keyLabel = event.character;
-                            if (keyLabel != null && RegExp(r'[0-9]').hasMatch(keyLabel)) {
+                            if (keyLabel != null &&
+                                RegExp(r'[0-9]').hasMatch(keyLabel)) {
                               _scanBuffer += keyLabel;
                               controller.text = _scanBuffer;
                             }
@@ -651,10 +842,13 @@ log("product keycode : ${tempResult.first['keycode']}");
                       child: TextFormField(
                         style: const TextStyle(color: Colors.white),
                         autofocus: false,
-                        readOnly: !_showKeyboard, // Only allow keyboard when _showKeyboard is true
+                        readOnly:
+                            !_showKeyboard, // Only allow keyboard when _showKeyboard is true
                         showCursor: true,
                         keyboardType: TextInputType.number,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly
+                        ],
                         controller: controller,
                         onTap: () {
                           // Show keyboard when user manually taps the field
@@ -665,7 +859,8 @@ log("product keycode : ${tempResult.first['keycode']}");
                         onFieldSubmitted: (value) {
                           if (value.trim().isNotEmpty) {
                             log('Searching for: $value');
-                            getProductsTableData(value);
+                            // Check version before fetching product data
+                            _fetchProductWithVersionCheck(value);
                           }
                           // Hide keyboard and keep focus for scanner
                           setState(() {
@@ -684,8 +879,9 @@ log("product keycode : ${tempResult.first['keycode']}");
                           labelText: 'Scan Your Product',
                           labelStyle: TextStyle(
                             fontSize: 7.sp,
-                            color:
-                                _focusNode.hasFocus ? Colors.white : Colors.grey,
+                            color: _focusNode.hasFocus
+                                ? Colors.white
+                                : Colors.grey,
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderSide: BorderSide(
@@ -741,7 +937,8 @@ log("product keycode : ${tempResult.first['keycode']}");
                                             decoration: BoxDecoration(
                                               image: imageBytes != null
                                                   ? DecorationImage(
-                                                      image: MemoryImage(imageBytes!),
+                                                      image: MemoryImage(
+                                                          imageBytes!),
                                                       filterQuality:
                                                           FilterQuality.high,
                                                       fit: BoxFit.fill,
