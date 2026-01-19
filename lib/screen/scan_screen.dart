@@ -63,9 +63,9 @@ class _ScanScreenState extends State<ScanScreen>
   String _scanBuffer = ''; // Buffer to collect scanner input
 
   // Current app build number - update this when releasing new versions
-  static const int _currentBuildNumber = 8;
-  String? _latestApkPath; // Store the APK path for update
-  String domainUrl = "http://192.168.1.12:45457";
+  static const int _currentBuildNumber = 9;
+  String? _latestApkApiKeycode; // Store the APK path for update
+  String domainUrl = "https://apis.blocks360.net";
   List<Color> colorList = [
     const Color(0xff2A33B5),
     const Color(0xff5A1C88),
@@ -316,7 +316,7 @@ class _ScanScreenState extends State<ScanScreen>
         final data = jsonDecode(response.body);
         if (data['success'] == true && data['data'] != null) {
           final int serverBuildNumber = data['data']['mobileBuildNumber'] ?? 0;
-          _latestApkPath = data['data']['apkPath'];
+          _latestApkApiKeycode = data['data']['keycode'];
 
           log('Server build number: $serverBuildNumber, Current build number: $_currentBuildNumber');
 
@@ -336,7 +336,7 @@ class _ScanScreenState extends State<ScanScreen>
 
   /// Download and install APK update
   Future<void> _downloadAndInstallApk() async {
-    if (_latestApkPath == null) {
+    if (_latestApkApiKeycode == null) {
       showBottomSnackBar('Update path not available');
       return;
     }
@@ -361,11 +361,11 @@ class _ScanScreenState extends State<ScanScreen>
       );
 
       // Download APK
-      final downloadUrl = '$domainUrl/api/v1/MobileBuildInfo/Download?path=$_latestApkPath';
+      final downloadUrl = '$domainUrl/api/v1/MobileBuildInfo/Download?keycode=$_latestApkApiKeycode';
       log('Downloading APK from: $downloadUrl');
 
       final response = await http.get(Uri.parse(downloadUrl)).timeout(
-        const Duration(minutes: 5),
+        const Duration(minutes: 25),
       );
 
       if (response.statusCode == 200) {
@@ -742,7 +742,7 @@ WHERE
 
     overlay.insert(overlayEntry);
 
-    Future.delayed(const Duration(seconds: 3), () {
+    Future.delayed(const Duration(seconds: 20), () {
       overlayEntry.remove();
     });
   }
