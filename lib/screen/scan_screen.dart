@@ -7,6 +7,8 @@ import 'dart:developer';
 import 'package:blocks_guide/helpers/connection_helper.dart';
 import 'package:blocks_guide/helpers/connection_provider.dart';
 import 'package:blocks_guide/helpers/kiosk_mode_manager.dart';
+import 'package:blocks_guide/core/theme/app_theme.dart';
+import 'package:blocks_guide/widgets/widgets.dart';
 import 'package:connect_to_sql_server_directly/connect_to_sql_server_directly.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
@@ -32,7 +34,7 @@ class ProductModel {
   final String sku;
   final String name;
   double retailPrice;
-  double? specialPrice; // Nullable special price
+  double? specialPrice;
   String? mixAndMatch;
 
   ProductModel({
@@ -59,46 +61,42 @@ class _ScanScreenState extends State<ScanScreen>
   TextEditingController controller = TextEditingController();
   final _sqlConnection = ConnectToSqlServerDirectly();
   Uint8List? imageBytes;
-  bool _showKeyboard = false; // Controls whether keyboard should be shown
-  String _scanBuffer = ''; // Buffer to collect scanner input
+  bool _showKeyboard = false;
+  String _scanBuffer = '';
 
   // Current app build number - update this when releasing new versions
   static const int _currentBuildNumber = 9;
-  String? _latestApkApiKeycode; // Store the APK path for update
-  String domainUrl = "https://apis.blocks360.net";
-  List<Color> colorList = [
-    const Color(0xff2A33B5),
-    const Color(0xff5A1C88),
-    const Color(0xff054A72),
-    const Color(0xff0A0848),
-    const Color(0xff4B024D),
-  ];
+  static const String _currentVersionNumber = "1.1.7";
 
-  int index = 0;
-  Color bottomColor = const Color(0xff092646);
-  Color topColor = const Color(0xff410D75);
-  late AnimationController _animationController;
-  late Animation<double> _animation;
-  late Timer _timer;
+  String? _latestApkApiKeycode;
+  String domainUrl = "https://apis.blocks360.net";
+
+  // Gradient colors for animated background
+  int _colorIndex = 0;
+  Color _bottomColor = AppColors.gradientSets[0][0];
+  Color _topColor = AppColors.gradientSets[0][1];
+
+  // Animation controllers
+  late AnimationController _bounceController;
+  late Animation<double> _bounceAnimation;
+  late Timer _gradientTimer;
   late AnimationController _scaleController;
   late Animation<double> _scaleAnimation;
   late AnimationController _colorController;
   late Animation<Color?> _colorAnimation;
-  Timer? _clearProductTimer; // Timer for clearing the product
+  Timer? _clearProductTimer;
+  late Timer _connectionCheckTimer;
 
-  /// Handle app lifecycle changes
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Kiosk mode is now controlled manually via buttons in the settings popup
   }
 
-  /// Check if current date is within date range
   bool isWithinDateRange(
       DateTime startDate, DateTime endDate, DateTime currentDate) {
     return startDate.isBefore(currentDate) && endDate.isAfter(currentDate);
   }
 
-  /// Check if current time is within time range
   bool isWithinTimeRange(
       String startTime, String endTime, DateTime currentTime) {
     final format = DateFormat.Hms();
@@ -108,11 +106,10 @@ class _ScanScreenState extends State<ScanScreen>
   }
 
   Future<String> getMixAndMatchData(String productId) async {
-    log("product id receivingb : $productId");
+    log("product id receiving: $productId");
     String mixMatchText = '';
     final today = DateTime.now();
 
-    // Get the current weekday as a name (Monday, Tuesday, etc.)
     List<String> weekdays = [
       'Sunday',
       'Monday',
@@ -122,16 +119,14 @@ class _ScanScreenState extends State<ScanScreen>
       'Friday',
       'Saturday'
     ];
-    String currentDayName = weekdays[today.weekday %
-        7]; // Weekday starts from 1 (Monday), so adjust for Sunday.
-    String weekdayCheck = "${currentDayName}_Check"; // e.g., "[Monday_Check]"
+    String currentDayName = weekdays[today.weekday % 7];
+    String weekdayCheck = "${currentDayName}_Check";
 
-    log('Crurrent Day :>>> $weekdayCheck');
+    log('Current Day: $weekdayCheck');
     var data = [];
     try {
       log('Before query execution');
 
-      // Query to get mix and match details for the product
       final response = await _sqlConnection.getRowsOfQueryResult("""
         SELECT MAM.Name
         FROM MixMatch MAM
@@ -142,44 +137,17 @@ class _ScanScreenState extends State<ScanScreen>
           AND ((MAM.IsTimeRestricted = '1' AND GETDATE() BETWEEN MAM.StartTime AND MAM.EndTime) OR MAM.IsTimeRestricted = '0')
       """) as List? ?? [];
 
-/*
-// SELECT
-//     MAM.*
-// FROM
-//     Mix_And_Match MAM
-// JOIN
-//     Mix_And_Match_Products MAMP
-//     ON MAM.Id = MAMP.Mix_And_Match_Id
-// WHERE
-//     MAMP.Product_Id = '$productId'
-//     AND MAM.Is_Active = '1'
-//     AND (
-//         (MAM.Is_Limited_Date = '1' AND GETDATE() BETWEEN MAM.Limited_Start_Date AND MAM.Limited_End_Date)
-//         OR MAM.Is_Limited_Date = '0'
-//         OR MAM.Is_Limited_Date IS NULL
-//     )
-//     AND (
-//         (MAM.Is_Time_Restricted = '1' AND GETDATE() BETWEEN MAM.Restricted_Time_Start_Date AND MAM.Restricted_Time_End_Date)
-//         OR MAM.Is_Time_Restricted = '0'
-//         OR MAM.Is_Time_Restricted IS NULL
-//     );
-*/
-
       log('getMixAndMatchData response >>> $response');
       if (response.isNotEmpty) {
         for (var row in response) {
-          // Check if the mix-and-match is valid for today's weekday
           bool isDayValid = row[weekdayCheck] == true || row[weekdayCheck] == 1;
-
           bool isDateRes = row['Is_Limited_Date'] == true ? true : false;
 
-          // Log the weekday check result
           log('Weekday check for $currentDayName: $isDayValid');
 
-          // Only proceed if the product is valid for today
           if (isDateRes && !isDayValid) {
             log('Mix and Match not valid for today\'s weekday');
-            return ''; // Return empty if not valid for today
+            return '';
           }
           setState(() {
             mixMatchText = row['Name'];
@@ -204,50 +172,47 @@ class _ScanScreenState extends State<ScanScreen>
   @override
   void initState() {
     super.initState();
-    fetchData();
+    _initializeApp();
   }
 
-  /// Initialize app data and animations
-  fetchData() async {
+  void _initializeApp() async {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
 
-    _animationController = AnimationController(
+    // Bounce animation for scanner hint
+    _bounceController = AnimationController(
       duration: const Duration(milliseconds: 700),
       vsync: this,
     );
-
-    _animation = Tween<double>(begin: -10, end: 10).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    _bounceAnimation = Tween<double>(begin: -8, end: 8).animate(
+      CurvedAnimation(parent: _bounceController, curve: Curves.easeInOut),
     );
+    _bounceController.repeat(reverse: true);
 
-    _animationController.repeat(reverse: true);
-
-    _timer = Timer.periodic(const Duration(seconds: 1), (Timer timer) {
+    // Gradient color transition timer
+    _gradientTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
       setState(() {
-        index = (index + 1) % colorList.length;
-        bottomColor = colorList[index];
-        topColor = colorList[(index + 1) % colorList.length];
+        _colorIndex = (_colorIndex + 1) % AppColors.gradientSets.length;
+        _bottomColor = AppColors.gradientSets[_colorIndex][0];
+        _topColor = AppColors.gradientSets[_colorIndex][1];
       });
     });
 
-    // Zoom In/Out Animation
+    // Scale animation for promotions
     _scaleController = AnimationController(
       duration: const Duration(seconds: 1),
       vsync: this,
     )..repeat(reverse: true);
-
     _scaleAnimation =
-        Tween<double>(begin: 1.0, end: 0.5).animate(_scaleController);
+        Tween<double>(begin: 1.0, end: 0.85).animate(_scaleController);
 
-    // Color Transition Animation
+    // Color animation for promotions
     _colorController = AnimationController(
       duration: const Duration(seconds: 1),
       vsync: this,
     )..repeat(reverse: true);
-
     _colorAnimation = ColorTween(
-      begin: Colors.green,
-      end: Colors.red,
+      begin: AppColors.success,
+      end: AppColors.error,
     ).animate(_colorController);
 
     // Check database connection on app start
@@ -255,8 +220,9 @@ class _ScanScreenState extends State<ScanScreen>
         Provider.of<ConnectionProvider>(context, listen: false);
     ConnectionHelper().checkInitialConnection(connectionProvider);
 
-    // Check database connection every minute
-    _timer = Timer.periodic(const Duration(minutes: 1), (timer) async {
+    // Check database connection periodically
+    _connectionCheckTimer =
+        Timer.periodic(const Duration(minutes: 1), (timer) async {
       final connectionProvider =
           Provider.of<ConnectionProvider>(context, listen: false);
       ConnectionProvider().loadConnectionStatus();
@@ -271,15 +237,15 @@ class _ScanScreenState extends State<ScanScreen>
     WidgetsBinding.instance.removeObserver(this);
     _focusNode.dispose();
     controller.dispose();
-    _animationController.dispose();
+    _bounceController.dispose();
     _scaleController.dispose();
     _colorController.dispose();
-    _timer.cancel();
+    _gradientTimer.cancel();
+    _connectionCheckTimer.cancel();
     _clearProductTimer?.cancel();
     super.dispose();
   }
 
-  /// Start timer to automatically clear product data after 15 seconds
   void _startClearProductTimer() {
     _clearProductTimer?.cancel();
 
@@ -291,24 +257,17 @@ class _ScanScreenState extends State<ScanScreen>
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Product data cleared.'),
-            ),
-          );
+          _showCustomSnackBar('Product data cleared');
         }
       });
     });
   }
 
-  /// Check if app version is valid by calling the API
-  /// Returns true if version is valid (can proceed), false if update is required
   Future<bool> _checkAppVersion() async {
     try {
       final response = await http
           .get(
-            Uri.parse(
-                '$domainUrl/api/v1/MobileBuildInfo/Application?app=1'),
+            Uri.parse('$domainUrl/api/v1/MobileBuildInfo/Application?app=1'),
           )
           .timeout(const Duration(seconds: 10));
 
@@ -321,155 +280,261 @@ class _ScanScreenState extends State<ScanScreen>
           log('Server build number: $serverBuildNumber, Current build number: $_currentBuildNumber');
 
           if (serverBuildNumber > _currentBuildNumber) {
-            // Update required - show modal
             _showUpdateRequiredModal();
             return false;
           }
         }
       }
-      return true; // Version is valid or API failed (allow app to work)
+      return true;
     } catch (e) {
       log('Error checking app version: $e');
-      return true; // On error, allow app to continue working
+      return true;
     }
   }
 
-  /// Download and install APK update
-  Future<void> _downloadAndInstallApk() async {
-    if (_latestApkApiKeycode == null) {
-      showBottomSnackBar('Update path not available');
-      return;
-    }
-
-    try {
-      // Show downloading indicator
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => WillPopScope(
-          onWillPop: () async => false,
-          child: const AlertDialog(
-            content: Row(
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(width: 20),
-                Text('Downloading update...'),
+  Future<void> _showErrorDialog(String title, String message) async {
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.4,
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.6,
+            ),
+            padding: EdgeInsets.all(16.r),
+            decoration: BoxDecoration(
+              color: AppColors.cardBackground,
+              borderRadius: BorderRadius.circular(16.r),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryDark.withValues(alpha: 0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
               ],
             ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Error Icon
+                  Container(
+                    padding: EdgeInsets.all(12.r),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.error_outline_rounded,
+                      size: 24.sp,
+                      color: AppColors.error,
+                    ),
+                  ),
+                  SizedBox(height: 12.h),
+
+                  // Title
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 10.sp,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.error,
+                    ),
+                  ),
+                  SizedBox(height: 6.h),
+
+                  // Message
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 7.sp,
+                      color: AppColors.textSecondary,
+                      height: 1.3,
+                    ),
+                  ),
+                  SizedBox(height: 14.h),
+
+                  // OK Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.error,
+                        foregroundColor: AppColors.white,
+                        padding: EdgeInsets.symmetric(vertical: 10.h),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10.r),
+                        ),
+                        elevation: 0,
+                      ),
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text(
+                        'OK',
+                        style: TextStyle(
+                          fontSize: 8.sp,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
-      );
-
-      // Download APK
-      final downloadUrl = '$domainUrl/api/v1/MobileBuildInfo/Download?keycode=$_latestApkApiKeycode';
-      log('Downloading APK from: $downloadUrl');
-
-      final response = await http.get(Uri.parse(downloadUrl)).timeout(
-        const Duration(minutes: 25),
-      );
-
-      if (response.statusCode == 200) {
-        // Save APK to temporary directory
-        final tempDir = await getTemporaryDirectory();
-        final apkFile = File('${tempDir.path}/app_update.apk');
-        await apkFile.writeAsBytes(response.bodyBytes);
-
-        log('APK saved to: ${apkFile.path}');
-
-        // Close downloading dialog
-        if (mounted) Navigator.pop(context);
-
-        // Disable kiosk mode before opening APK installer
-        log('Disabling kiosk mode before APK installation...');
-        await KioskModeManager.stopKioskMode();
-
-        // Small delay to ensure kiosk mode is fully disabled
-        await Future.delayed(const Duration(milliseconds: 500));
-
-        // Install APK
-        final result = await OpenFilex.open(apkFile.path);
-        log('Open file result: ${result.type} - ${result.message}');
-
-        if (result.type != ResultType.done) {
-          showBottomSnackBar('Failed to open installer: ${result.message}');
-        }
-      } else {
-        // Close downloading dialog
-        if (mounted) Navigator.pop(context);
-        showBottomSnackBar('Failed to download update: ${response.statusCode}');
-      }
-    } catch (e) {
-      log('Error downloading/installing APK: $e');
-      // Close downloading dialog if open
-      if (mounted) Navigator.pop(context);
-      showBottomSnackBar('Error updating app: $e');
-    }
+        );
+      },
+    );
   }
 
-  /// Show modal bottom sheet when update is required
-  void _showUpdateRequiredModal() {
-    showModalBottomSheet(
+  void _showBuildInfoDialog() {
+    showDialog(
       context: context,
-      isDismissible: false,
-      enableDrag: false,
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
-      ),
-      builder: (context) {
-        return WillPopScope(
-          onWillPop: () async => false,
-          child: Padding(
-            padding: EdgeInsets.all(24.r),
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.35,
+            padding: EdgeInsets.all(16.r),
+            decoration: BoxDecoration(
+              color: AppColors.cardBackground,
+              borderRadius: BorderRadius.circular(16.r),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryDark.withValues(alpha: 0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.system_update,
-                  size: 28.sp,
-                  color: Colors.orange,
-                ),
-                SizedBox(height: 8.h),
-                const Text(
-                  'Update Required',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
+                // App Icon
+                Container(
+                  padding: EdgeInsets.all(12.r),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppColors.accentBlue, AppColors.accentTeal],
+                    ),
+                    borderRadius: BorderRadius.circular(12.r),
+                  ),
+                  child: Icon(
+                    Icons.info_outline_rounded,
+                    size: 24.sp,
+                    color: AppColors.white,
                   ),
                 ),
-                SizedBox(height: 8.h),
+                SizedBox(height: 12.h),
+
+                // Title
                 Text(
-                  'This version is outdated. Please install the latest version to continue using the app.',
-                  textAlign: TextAlign.center,
+                  'App Information',
                   style: TextStyle(
-                    color: Colors.grey[700],
+                    fontSize: 10.sp,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
                   ),
                 ),
-                SizedBox(height: 10.h),
+                SizedBox(height: 12.h),
+
+                // Build Number
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(12.r),
+                  decoration: BoxDecoration(
+                    color: AppColors.backgroundLight,
+                    borderRadius: BorderRadius.circular(10.r),
+                    border: Border.all(
+                      color: AppColors.divider,
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Build Number',
+                        style: TextStyle(
+                          fontSize: 8.sp,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      Text(
+                        '$_currentBuildNumber',
+                        style: TextStyle(
+                          fontSize: 10.sp,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.accentBlue,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 6.h),
+                // Version Number
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(12.r),
+                  decoration: BoxDecoration(
+                    color: AppColors.backgroundLight,
+                    borderRadius: BorderRadius.circular(10.r),
+                    border: Border.all(
+                      color: AppColors.divider,
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Version Number',
+                        style: TextStyle(
+                          fontSize: 8.sp,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      Text(
+                        _currentVersionNumber,
+                        style: TextStyle(
+                          fontSize: 10.sp,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.accentBlue,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 14.h),
+
+                // OK Button
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      padding: EdgeInsets.symmetric(vertical: 14.h),
+                      backgroundColor: AppColors.accentBlue,
+                      foregroundColor: AppColors.white,
+                      padding: EdgeInsets.symmetric(vertical: 10.h),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10.r),
                       ),
+                      elevation: 0,
                     ),
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _downloadAndInstallApk();
-                    },
-                    child: const Text(
-                      'Update Now',
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(
+                      'OK',
                       style: TextStyle(
+                        fontSize: 8.sp,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
                       ),
                     ),
                   ),
                 ),
-                SizedBox(height: 8.h),
               ],
             ),
           ),
@@ -478,7 +543,196 @@ class _ScanScreenState extends State<ScanScreen>
     );
   }
 
-  /// Wrapper function to check version before fetching product data
+  Future<void> _downloadAndInstallApk() async {
+    if (_latestApkApiKeycode == null) {
+      _showErrorDialog(
+          'Update Error', 'Update path not available. Please try again later.');
+      return;
+    }
+
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => PopScope(
+          canPop: false,
+          child: Dialog(
+            backgroundColor: Colors.transparent,
+            child: Container(
+              padding: EdgeInsets.all(16.r),
+              decoration: BoxDecoration(
+                color: AppColors.cardBackground,
+                borderRadius: BorderRadius.circular(16.r),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 20.w,
+                    height: 20.w,
+                    child: const CircularProgressIndicator(
+                      color: AppColors.accentBlue,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                  SizedBox(width: 14.w),
+                  Text(
+                    'Downloading update...',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 9.sp,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final downloadUrl =
+          '$domainUrl/api/v1/MobileBuildInfo/Download?keycode=$_latestApkApiKeycode';
+      log('Downloading APK from: $downloadUrl');
+
+      final response = await http.get(Uri.parse(downloadUrl)).timeout(
+            const Duration(minutes: 25),
+          );
+
+      if (response.statusCode == 200) {
+        final tempDir = await getTemporaryDirectory();
+        final apkFile = File('${tempDir.path}/app_update.apk');
+        await apkFile.writeAsBytes(response.bodyBytes);
+
+        log('APK saved to: ${apkFile.path}');
+
+        if (mounted) Navigator.pop(context);
+
+        log('Disabling kiosk mode before APK installation...');
+        await KioskModeManager.stopKioskMode();
+
+        await Future.delayed(const Duration(milliseconds: 600));
+
+        final result = await OpenFilex.open(apkFile.path);
+        log('Open file result: ${result.type} - ${result.message}');
+
+        if (result.type != ResultType.done) {
+          _showErrorDialog('Installation Error',
+              'Failed to open installer: ${result.message}');
+        }
+      } else {
+        if (mounted) Navigator.pop(context);
+        _showErrorDialog('Download Failed',
+            'Failed to download update. Server returned status code: ${response.statusCode}');
+      }
+    } catch (e) {
+      log('Error downloading/installing APK: $e');
+      if (mounted) Navigator.pop(context);
+      _showErrorDialog(
+          'Update Error', 'An error occurred while updating the app: $e');
+    }
+  }
+
+  void _showUpdateRequiredModal() {
+    showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return PopScope(
+          canPop: false,
+          child: Container(
+            margin: EdgeInsets.all(12.r),
+            padding: EdgeInsets.all(16.r),
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.5,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.cardBackground,
+              borderRadius: BorderRadius.circular(20.r),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryDark.withValues(alpha: 0.2),
+                  blurRadius: 16,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(12.r),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          AppColors.warning.withValues(alpha: 0.2),
+                          AppColors.warning.withValues(alpha: 0.1),
+                        ],
+                      ),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.system_update_rounded,
+                      size: 20.sp,
+                      color: AppColors.warning,
+                    ),
+                  ),
+                  SizedBox(height: 8.h),
+                  Text(
+                    'Update Required',
+                    style: TextStyle(
+                      fontSize: 10.sp,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  SizedBox(height: 6.h),
+                  Text(
+                    'A new version is available. Please update to continue using the app.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 6.sp,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  SizedBox(height: 14.h),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.success,
+                        foregroundColor: AppColors.white,
+                        padding: EdgeInsets.symmetric(vertical: 10.h),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10.r),
+                        ),
+                        elevation: 0,
+                      ),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _downloadAndInstallApk();
+                      },
+                      child: Text(
+                        'Update Now',
+                        style: TextStyle(
+                          fontSize: 6.sp,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _fetchProductWithVersionCheck(String text) async {
     final isVersionValid = await _checkAppVersion();
     if (isVersionValid) {
@@ -487,28 +741,24 @@ class _ScanScreenState extends State<ScanScreen>
   }
 
   Future<void> getProductsTableData(String text) async {
-    // Check if database is connected before proceeding
     final connectionProvider =
         Provider.of<ConnectionProvider>(context, listen: false);
     if (!connectionProvider.isConnected) {
-      showBottomSnackBar('Please connect to the database first.');
+      _showCustomSnackBar('Please connect to the database first');
       return;
     }
 
     setState(() {
       isLoading = true;
-      // controller.text = '';
       controller.text = text;
     });
     productList.clear();
     log('Product list empty: ${productList.isEmpty}');
     log('Scanned text: $text');
 
-    // Check if there is internet connectivity
     var connectivityResult = await (Connectivity().checkConnectivity());
     if (connectivityResult == ConnectivityResult.none) {
-      showBottomSnackBar(
-          'Couldn\'t connect to the server. Please check your connection.');
+      _showCustomSnackBar('No internet connection. Please check your network.');
       setState(() {
         isLoading = false;
         controller.text = '';
@@ -519,7 +769,6 @@ class _ScanScreenState extends State<ScanScreen>
     bool connect = false;
 
     try {
-      // Establish SQL Server connection using saved credentials
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       if (prefs.getString('serverIp') != null &&
           prefs.getString('database') != null &&
@@ -535,7 +784,6 @@ class _ScanScreenState extends State<ScanScreen>
           List<Map<String, dynamic>> tablesList =
               tables.cast<Map<String, dynamic>>();
           log('Tables List>>> $tablesList');
-
           connect = tablesList.isNotEmpty;
         }
 
@@ -544,14 +792,10 @@ class _ScanScreenState extends State<ScanScreen>
     } catch (e) {
       print('Failed to connect to the database: $e');
 
-      // Handle the host unreachable error by displaying a custom message
       if (e.toString().contains('Host unreachable')) {
-        // Show custom error message for host unreachable
-        showBottomSnackBar('Please connect to the same network as the server.');
+        _showCustomSnackBar('Please connect to the same network as the server');
       } else {
-        // Generic error message for any other exception
-        showBottomSnackBar(
-            'Network Error: Device is not connected or SQL server is unreachable.');
+        _showCustomSnackBar('Network Error: SQL server is unreachable');
       }
 
       setState(() {
@@ -561,11 +805,8 @@ class _ScanScreenState extends State<ScanScreen>
       return;
     }
 
-    print('tetestses $connect');
     if (!connect) {
-      print("fdasfdas");
-      showBottomSnackBar(
-          'Couldn\'t connect to the server. Please check your internet connection.');
+      _showCustomSnackBar('Unable to connect to the server');
       setState(() {
         isLoading = false;
         controller.text = '';
@@ -577,7 +818,6 @@ class _ScanScreenState extends State<ScanScreen>
       final today = DateTime.now();
       log('Today Date: $today');
 
-      // Query to get basic product data
       final productResponse = await _sqlConnection.getRowsOfQueryResult("""
         SELECT keycode, ProductName, RetailPrice, ProductNature, TaxNonTax, EBTEligible, WeightItem, LoyaltyPoint
         FROM Products
@@ -587,7 +827,7 @@ class _ScanScreenState extends State<ScanScreen>
       log('Product response: $productResponse');
 
       if (productResponse is! List) {
-        showBottomSnackBar('Failed to fetch product data');
+        _showCustomSnackBar('Failed to fetch product data');
       } else {
         List<Map<String, dynamic>> tempResult =
             productResponse.cast<Map<String, dynamic>>();
@@ -601,30 +841,14 @@ class _ScanScreenState extends State<ScanScreen>
           log('MixMatch: $mixMatch');
           _addProduct(element, mixMatch: mixMatch);
           log('product id ${element['Id'].toString()}');
-          // Now we fetch and apply mix and match logic
         }
       }
 
-      // Now we fetch any special price that applies
       final specialPriceResponse = await _sqlConnection.getRowsOfQueryResult("""
 SELECT keycode, SpecialPrice FROM Products WHERE keycode = (select Productkeycode from ProductSKUs where ProductSKU = '$text')
 AND CONVERT(DATE, GETDATE()) BETWEEN CONVERT(DATE, StartDate) AND CONVERT(DATE, EndDate) AND OnSpecial = 1
 """) as List? ?? [];
 
-/** 
- * SELECT Id, special_price
-FROM Products
-WHERE
-    (plu_id = '$text' OR Barcode = '$text' OR Id IN (SELECT Product_Id FROM ProductSKUs WHERE SKU = '$text'))
-    AND CONVERT(DATE, GETDATE()) BETWEEN CONVERT(DATE, on_special_datetime1) AND CONVERT(DATE, on_special_datetime2)
-    AND on_special = 1;
-*/
-
-      // ("""SELECT Id, special_price
-      // FROM Product
-      // WHERE (plu_id = '$text' OR Barcode = '$text' OR sku = '$text')
-      // AND '$today' BETWEEN CONVERT(DATE, on_special_datetime1) AND CONVERT(DATE, on_special_datetime2)
-      // AND on_special = 1;""");
       log('special Price Response:    $specialPriceResponse');
       if (specialPriceResponse.isNotEmpty) {
         for (var product in productList) {
@@ -642,13 +866,11 @@ WHERE
         }
       }
 
-      // Check if no product was found in both cases
       if (productList.isEmpty) {
-        showBottomSnackBar('No product found');
+        _showCustomSnackBar('No product found');
       } else {
         List<Map<String, dynamic>> tempResult =
             productResponse.cast<Map<String, dynamic>>();
-        // Fetch product image if found
         log("product keycode : ${tempResult.first['keycode']}");
         final imageResponse = await _sqlConnection.getRowsOfQueryResult(
               "select CAST(N'' AS XML).value('xs:base64Binary(xs:hexBinary(sql:column(\"ImageHex\")))', 'VARCHAR(MAX)') AS ImageData from (select CONVERT(VARCHAR(MAX), ImageData, 2) AS ImageHex from Products where keycode = ${tempResult.first['keycode']}) AS T",
@@ -674,17 +896,16 @@ WHERE
       }
     } catch (error) {
       print('Error occurred while querying data: $error');
-      showBottomSnackBar('An error occurred while fetching data.');
+      _showCustomSnackBar('An error occurred while fetching data');
     }
 
     setState(() {
       isLoading = false;
       controller.text = '';
-      _startClearProductTimer(); // Start the timer to clear product data
+      _startClearProductTimer();
     });
   }
 
-  /// Add product to the display list
   void _addProduct(Map<String, dynamic> element, {String mixMatch = ''}) {
     final keycode = element['keycode']?.toString() ?? '';
     final sku = element['ProductSKU']?.toString() ?? '';
@@ -710,30 +931,53 @@ WHERE
     }
   }
 
-  void showBottomSnackBar(String message) {
+  void _showCustomSnackBar(String message) {
     final overlay = Overlay.of(context);
-    final overlayEntry = OverlayEntry(
+    late OverlayEntry overlayEntry;
+
+    overlayEntry = OverlayEntry(
       builder: (context) => Positioned(
-        bottom: MediaQuery.of(context).size.height * 0.1,
-        left: MediaQuery.of(context).size.width * 0.1,
-        width: MediaQuery.of(context).size.width * 0.8,
+        bottom: MediaQuery.of(context).size.height * 0.08,
+        left: MediaQuery.of(context).size.width * 0.2,
+        width: MediaQuery.of(context).size.width * 0.6,
         child: Material(
           color: Colors.transparent,
-          child: Center(
-            child: Container(
-              padding: const EdgeInsets.all(12.0),
-              decoration: BoxDecoration(
-                color: Colors.green,
-                borderRadius: BorderRadius.circular(8.0),
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppColors.primaryDark, AppColors.primaryMedium],
               ),
-              child: Text(
-                message,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
+              borderRadius: BorderRadius.circular(16.r),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryDark.withValues(alpha: 0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
                 ),
-              ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.info_outline_rounded,
+                  color: AppColors.white,
+                  size: 16.sp,
+                ),
+                SizedBox(width: 10.w),
+                Flexible(
+                  child: Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppColors.white,
+                      fontSize: 9.sp,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -742,8 +986,47 @@ WHERE
 
     overlay.insert(overlayEntry);
 
-    Future.delayed(const Duration(seconds: 20), () {
+    Future.delayed(const Duration(seconds: 4), () {
       overlayEntry.remove();
+    });
+  }
+
+  void _handleKeyEvent(KeyEvent event) {
+    if (!_showKeyboard && event is KeyDownEvent) {
+      final key = event.logicalKey;
+
+      if (key == LogicalKeyboardKey.enter ||
+          key == LogicalKeyboardKey.numpadEnter) {
+        if (_scanBuffer.isNotEmpty) {
+          log('Scanner input: $_scanBuffer');
+          controller.text = _scanBuffer;
+          _fetchProductWithVersionCheck(_scanBuffer);
+          _scanBuffer = '';
+        }
+      } else {
+        final keyLabel = event.character;
+        if (keyLabel != null && RegExp(r'[0-9]').hasMatch(keyLabel)) {
+          _scanBuffer += keyLabel;
+          controller.text = _scanBuffer;
+        }
+      }
+    }
+  }
+
+  void _handleFieldSubmitted(String value) {
+    if (value.trim().isNotEmpty) {
+      log('Searching for: $value');
+      _fetchProductWithVersionCheck(value);
+    }
+    setState(() {
+      _showKeyboard = false;
+    });
+    controller.clear();
+    _scanBuffer = '';
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        _focusNode.requestFocus();
+      }
     });
   }
 
@@ -752,520 +1035,115 @@ WHERE
     return WillPopScope(
       onWillPop: () async => false,
       child: Scaffold(
-        backgroundColor: Colors.white,
-        appBar: AppBar(
-          flexibleSpace: AnimatedContainer(
-            duration: const Duration(seconds: 2),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [bottomColor, topColor],
-              ),
-            ),
-          ),
-          elevation: 0,
-          title: Text(
-            'Scan Product For Price',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 10.sp,
-            ),
-          ),
-          centerTitle: true,
-          backgroundColor: Colors.white,
-          iconTheme: const IconThemeData(color: Colors.white),
-          actions: [
-            Consumer<ConnectionProvider>(
-              builder: (context, value, child) {
-                bool connection = value.isConnected;
-                // Connection status is managed by ConnectionProvider
-                return IconButton(
-                  icon: Icon(
-                    Icons.settings,
-                    color: connection ? Colors.green : Colors.red,
-                  ),
-                  onPressed: () {
-                    FocusScope.of(context).unfocus();
-                    KioskModeManager().showPasswordDialog(context);
-                  },
-                );
-              },
-            ),
-          ],
-        ),
+        backgroundColor: AppColors.primaryDark,
         body: Stack(
           children: [
+            // Animated gradient background
             AnimatedContainer(
-              duration: const Duration(seconds: 1),
+              duration: const Duration(seconds: 2),
+              curve: Curves.easeInOut,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [bottomColor, topColor],
+                  colors: [_topColor, _bottomColor],
                 ),
               ),
             ),
-            Padding(
-              padding:
-                  const EdgeInsets.only(left: 16.0, right: 16.0, top: 16.0).r,
+
+            // Main content
+            SafeArea(
               child: Column(
                 children: [
-                  SizedBox(
-                    width: MediaQuery.of(context).size.width / 0.5.w,
-                    height: 60.h,
-                    child: KeyboardListener(
-                      focusNode: _focusNode,
-                      autofocus: true,
-                      onKeyEvent: (KeyEvent event) {
-                        // Only handle when keyboard is hidden (scanner mode)
-                        if (!_showKeyboard && event is KeyDownEvent) {
-                          final key = event.logicalKey;
-
-                          // Check if Enter key is pressed (scanner sends Enter after barcode)
-                          if (key == LogicalKeyboardKey.enter ||
-                              key == LogicalKeyboardKey.numpadEnter) {
-                            if (_scanBuffer.isNotEmpty) {
-                              log('Scanner input: $_scanBuffer');
-                              controller.text = _scanBuffer;
-
-                              // Check version before fetching product data
-                              _fetchProductWithVersionCheck(_scanBuffer);
-
-                              _scanBuffer = '';
-                            }
-                          } else {
-                            // Collect digit characters from scanner
-                            final keyLabel = event.character;
-                            if (keyLabel != null &&
-                                RegExp(r'[0-9]').hasMatch(keyLabel)) {
-                              _scanBuffer += keyLabel;
-                              controller.text = _scanBuffer;
-                            }
-                          }
-                        }
-                      },
-                      child: TextFormField(
-                        style: const TextStyle(color: Colors.white),
-                        autofocus: false,
-                        readOnly:
-                            !_showKeyboard, // Only allow keyboard when _showKeyboard is true
-                        showCursor: true,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly
-                        ],
-                        controller: controller,
-                        onTap: () {
-                          // Show keyboard when user manually taps the field
-                          setState(() {
-                            _showKeyboard = true;
-                          });
+                  // Custom App Bar
+                  Consumer<ConnectionProvider>(
+                    builder: (context, connectionProvider, child) {
+                      return CustomAppBar(
+                        title: 'Price Checker',
+                        topColor: _topColor,
+                        bottomColor: _bottomColor,
+                        isConnected: connectionProvider.isConnected,
+                        onSettingsPressed: () {
+                          FocusScope.of(context).unfocus();
+                          KioskModeManager().showPasswordDialog(context);
                         },
-                        onFieldSubmitted: (value) {
-                          if (value.trim().isNotEmpty) {
-                            log('Searching for: $value');
-                            // Check version before fetching product data
-                            _fetchProductWithVersionCheck(value);
-                          }
-                          // Hide keyboard and keep focus for scanner
-                          setState(() {
-                            _showKeyboard = false;
-                          });
-                          controller.clear();
-                          _scanBuffer = '';
-                          // Re-focus for scanner input after keyboard closes
-                          Future.delayed(const Duration(milliseconds: 100), () {
-                            if (mounted) {
-                              _focusNode.requestFocus();
-                            }
-                          });
-                        },
-                        decoration: InputDecoration(
-                          labelText: 'Scan Your Product',
-                          labelStyle: TextStyle(
-                            fontSize: 7.sp,
-                            color: _focusNode.hasFocus
-                                ? Colors.white
-                                : Colors.grey,
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderSide: BorderSide(
-                              color: Colors.amberAccent,
-                              width: 1.0.w,
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderSide: BorderSide(
-                              color: Colors.grey,
-                              width: 1.0.w,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  SizedBox(height: 10.h),
-
-                  // Product Display Section
-                  Expanded(
-                    flex: 8,
-                    child: Container(
-                        padding: const EdgeInsets.all(10).r,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(20.r),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Colors.black54,
-                              blurRadius: 5,
-                              spreadRadius: 15,
-                            ),
-                          ],
-                        ),
-                        child: isLoading
-                            ? const Center(
-                                child: CircularProgressIndicator(
-                                  color: Colors.black,
-                                ),
-                              )
-                            : productList.isNotEmpty
-                                ? Row(
-                                    children: [
-                                      Expanded(
-                                        child: Padding(
-                                          padding:
-                                              const EdgeInsets.only(right: 8.0)
-                                                  .r,
-                                          child: Container(
-                                            height: 320.h,
-                                            decoration: BoxDecoration(
-                                              image: imageBytes != null
-                                                  ? DecorationImage(
-                                                      image: MemoryImage(
-                                                          imageBytes!),
-                                                      filterQuality:
-                                                          FilterQuality.high,
-                                                      fit: BoxFit.fill,
-                                                    )
-                                                  : const DecorationImage(
-                                                      image: AssetImage(
-                                                          'assets/images/sho.png'),
-                                                      filterQuality:
-                                                          FilterQuality.high,
-                                                      fit: BoxFit.fill,
-                                                    ),
-                                              color: Colors.transparent,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      Container(
-                                          height: 350.h,
-                                          width: 1.w,
-                                          color: Colors.grey.withOpacity(0.5)),
-                                      Expanded(
-                                        child: SingleChildScrollView(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.center,
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: productList.map((item) {
-                                              log('item mixmatch : ${item.mixAndMatch}');
-                                              return Column(
-                                                children: [
-                                                  Container(
-                                                    width: 160.w,
-                                                    decoration: BoxDecoration(
-                                                        color: Colors.white,
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(
-                                                                    30.r)),
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .center,
-                                                      mainAxisAlignment:
-                                                          MainAxisAlignment
-                                                              .center,
-                                                      children: [
-                                                        Text(
-                                                          item.name,
-                                                          textAlign:
-                                                              TextAlign.center,
-                                                          style: TextStyle(
-                                                            fontSize: 10.sp,
-                                                            fontWeight:
-                                                                FontWeight.w700,
-                                                          ),
-                                                        ),
-                                                        Padding(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .symmetric(
-                                                                  horizontal:
-                                                                      8.0),
-                                                          child: Row(
-                                                            children: [
-                                                              Expanded(
-                                                                flex: 3,
-                                                                child: Text(
-                                                                  'Retail Price: ',
-                                                                  style:
-                                                                      TextStyle(
-                                                                    fontSize:
-                                                                        10.sp,
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .bold,
-                                                                    color: Colors
-                                                                        .black,
-                                                                  ),
-                                                                ),
-                                                              ),
-                                                              Text(
-                                                                '\$',
-                                                                style:
-                                                                    TextStyle(
-                                                                  fontSize:
-                                                                      12.sp,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                  color: Colors
-                                                                      .green,
-                                                                ),
-                                                              ),
-                                                              Expanded(
-                                                                flex: 2,
-                                                                child:
-                                                                    FittedBox(
-                                                                  child: Text(
-                                                                    item.retailPrice
-                                                                        .toStringAsFixed(
-                                                                            2),
-                                                                    style:
-                                                                        TextStyle(
-                                                                      fontSize:
-                                                                          25.sp,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .bold,
-                                                                      color: Colors
-                                                                          .green,
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                        if (item.mixAndMatch!
-                                                            .isNotEmpty)
-                                                          FittedBox(
-                                                            child:
-                                                                AnimatedBuilder(
-                                                              animation:
-                                                                  _scaleAnimation,
-                                                              builder: (context,
-                                                                  child) {
-                                                                return Transform
-                                                                    .scale(
-                                                                  scale: _scaleAnimation
-                                                                      .value, // Apply zoom animation
-                                                                  child:
-                                                                      AnimatedBuilder(
-                                                                    animation:
-                                                                        _colorAnimation,
-                                                                    builder:
-                                                                        (context,
-                                                                            child) {
-                                                                      return Text(
-                                                                        item.mixAndMatch!,
-                                                                        style:
-                                                                            TextStyle(
-                                                                          fontSize:
-                                                                              20.sp,
-                                                                          fontWeight:
-                                                                              FontWeight.bold,
-                                                                          color:
-                                                                              _colorAnimation.value, // Apply color animation
-                                                                        ),
-                                                                      );
-                                                                    },
-                                                                  ),
-                                                                );
-                                                              },
-                                                            ),
-                                                          ),
-                                                        if (item.specialPrice !=
-                                                                null &&
-                                                            item.specialPrice !=
-                                                                0.00) ...[
-                                                          Padding(
-                                                            padding:
-                                                                const EdgeInsets
-                                                                    .symmetric(
-                                                                    horizontal:
-                                                                        15.0),
-                                                            child: Container(
-                                                              height: 1.h,
-                                                              color:
-                                                                  Colors.grey,
-                                                            ),
-                                                          ),
-                                                          Padding(
-                                                            padding:
-                                                                const EdgeInsets
-                                                                    .symmetric(
-                                                                    horizontal:
-                                                                        45.0),
-                                                            child: Row(
-                                                              children: [
-                                                                Expanded(
-                                                                  flex: 3,
-                                                                  child: Text(
-                                                                    'Discounted Price:',
-                                                                    style:
-                                                                        TextStyle(
-                                                                      fontSize:
-                                                                          8.sp,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .bold,
-                                                                      color: Colors
-                                                                          .black,
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                                Text(
-                                                                  '\$',
-                                                                  style:
-                                                                      TextStyle(
-                                                                    fontSize:
-                                                                        12.sp,
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .bold,
-                                                                    color: Colors
-                                                                        .green,
-                                                                  ),
-                                                                ),
-                                                                Expanded(
-                                                                  flex: 2,
-                                                                  child:
-                                                                      FittedBox(
-                                                                    child:
-                                                                        AnimatedBuilder(
-                                                                      animation:
-                                                                          _scaleAnimation,
-                                                                      builder:
-                                                                          (context,
-                                                                              child) {
-                                                                        return Transform
-                                                                            .scale(
-                                                                          scale:
-                                                                              _scaleAnimation.value, // Apply zoom animation
-                                                                          child:
-                                                                              AnimatedBuilder(
-                                                                            animation:
-                                                                                _colorAnimation,
-                                                                            builder:
-                                                                                (context, child) {
-                                                                              return Text(
-                                                                                item.specialPrice!.toStringAsFixed(2),
-                                                                                style: TextStyle(
-                                                                                  fontWeight: FontWeight.bold,
-                                                                                  color: _colorAnimation.value, // Apply color animation
-                                                                                ),
-                                                                              );
-                                                                            },
-                                                                          ),
-                                                                        );
-                                                                      },
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ],
-                                              );
-                                            }).toList(),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  )
-                                : Consumer<ConnectionProvider>(
-                                    builder: (context, value, child) {
-                                      bool connection = value
-                                          .isConnected; // Provider se value access ki.
-                                      return Center(
-                                        child: Text(
-                                          connection
-                                              ? 'Please Scan Your Product'
-                                              : 'Please connect to your server',
-                                          style: connection
-                                              ? TextStyle(fontSize: 15.sp)
-                                              : TextStyle(
-                                                  color: Colors.red,
-                                                  fontSize: 15.sp),
-                                        ),
-                                      );
-                                    },
-                                  )),
-                  ),
-                  SizedBox(height: 10.h),
-                  AnimatedBuilder(
-                    animation: _animation,
-                    builder: (context, child) {
-                      return Expanded(
-                        flex: 2,
-                        child: Transform.translate(
-                          offset: Offset(0, _animation.value),
-                          child: SingleChildScrollView(
-                            child: Column(
-                              children: [
-                                SizedBox(
-                                  width: 75.w,
-                                  height: 75.h,
-                                  child: const Image(
-                                    image:
-                                        AssetImage('assets/images/qr_code.png'),
-                                    fit: BoxFit.contain,
-                                  ),
-                                ),
-                                Text(
-                                  "Scan your product's QRCode or Barcode here",
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 5.sp,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                        onDoubleTap: _showBuildInfoDialog,
                       );
                     },
                   ),
+
+                  // Body content
+                  Expanded(
+                    child: Padding(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                      child: Column(
+                        children: [
+                          // Scanner input field
+                          ScannerInputField(
+                            controller: controller,
+                            focusNode: _focusNode,
+                            showKeyboard: _showKeyboard,
+                            onSubmitted: _handleFieldSubmitted,
+                            onKeyEvent: _handleKeyEvent,
+                            onTap: () {
+                              setState(() {
+                                _showKeyboard = true;
+                              });
+                            },
+                          ),
+                          SizedBox(height: 10.h),
+
+                          // Product display area
+                          Expanded(
+                            child: _buildProductArea(),
+                          ),
+                          SizedBox(height: 6.h),
+
+                          // Scanner hint
+                          ScannerHintWidget(
+                            bounceAnimation: _bounceAnimation,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
-            )
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildProductArea() {
+    if (isLoading) {
+      return const LoadingWidget(
+        message: 'Fetching product information...',
+      );
+    }
+
+    if (productList.isEmpty) {
+      return Consumer<ConnectionProvider>(
+        builder: (context, connectionProvider, child) {
+          return EmptyStateWidget(
+            isConnected: connectionProvider.isConnected,
+          );
+        },
+      );
+    }
+
+    // Product display
+    final product = productList.first;
+    return ProductDisplayCard(
+      productName: product.name,
+      retailPrice: product.retailPrice,
+      specialPrice: product.specialPrice,
+      mixAndMatch: product.mixAndMatch,
+      imageBytes: imageBytes,
+      scaleAnimation: _scaleAnimation,
+      colorAnimation: _colorAnimation,
     );
   }
 }
