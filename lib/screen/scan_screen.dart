@@ -734,10 +734,11 @@ class _ScanScreenState extends State<ScanScreen>
   }
 
   Future<void> _fetchProductWithVersionCheck(String text) async {
-    final isVersionValid = await _checkAppVersion();
-    if (isVersionValid) {
+    // final isVersionValid = await 
+    _checkAppVersion();
+    // if (isVersionValid) {
       getProductsTableData(text);
-    }
+    // }
   }
 
   Future<void> getProductsTableData(String text) async {
