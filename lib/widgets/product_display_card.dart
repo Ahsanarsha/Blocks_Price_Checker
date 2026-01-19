@@ -134,45 +134,45 @@ class _ProductInfoSection extends StatelessWidget {
     final hasSpecialPrice = specialPrice != null && specialPrice != 0.00;
 
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Product Name - flexible to take available space
-          Flexible(
-            flex: hasMixMatch || hasSpecialPrice ? 2 : 3,
-            child: _ProductNameBadge(name: productName),
-          ),
-          SizedBox(height: 8.h),
-
-          // Retail Price
-          _PriceDisplay(
-            label: 'RETAIL PRICE',
-            price: retailPrice,
-            isSpecial: false,
-          ),
-
-          // Mix and Match
-          if (hasMixMatch) ...[
+      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Product Name
+            _ProductNameBadge(name: productName),
             SizedBox(height: 6.h),
-            _MixMatchBadge(
-              text: mixAndMatch!,
-              scaleAnimation: scaleAnimation,
-              colorAnimation: colorAnimation,
-            ),
-          ],
 
-          // Special/Discounted Price
-          if (hasSpecialPrice) ...[
-            SizedBox(height: 6.h),
-            _SpecialPriceDisplay(
-              price: specialPrice!,
-              scaleAnimation: scaleAnimation,
-              colorAnimation: colorAnimation,
+            // Retail Price
+            _PriceDisplay(
+              label: 'RETAIL PRICE',
+              price: retailPrice,
+              isSpecial: false,
             ),
+
+            // Mix and Match
+            if (hasMixMatch) ...[
+              SizedBox(height: 4.h),
+              _MixMatchBadge(
+                text: mixAndMatch!,
+                scaleAnimation: scaleAnimation,
+                colorAnimation: colorAnimation,
+              ),
+            ],
+
+            // Special/Discounted Price
+            if (hasSpecialPrice) ...[
+              SizedBox(height: 4.h),
+              _SpecialPriceDisplay(
+                price: specialPrice!,
+                scaleAnimation: scaleAnimation,
+                colorAnimation: colorAnimation,
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
