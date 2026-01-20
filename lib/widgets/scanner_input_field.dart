@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:blocks_guide/core/theme/app_theme.dart';
 
-/// Modern scanner input field with glassmorphism effect
+/// Modern scanner input field for light theme
 class ScannerInputField extends StatefulWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
@@ -72,7 +71,7 @@ class _ScannerInputFieldState extends State<ScannerInputField>
               borderRadius: BorderRadius.circular(12.r),
               boxShadow: [
                 BoxShadow(
-                  color: (_isFocused ? AppColors.accentTeal : AppColors.white)
+                  color: (_isFocused ? AppColors.primaryBlue : AppColors.shadowColor)
                       .withValues(alpha: 0.15),
                   blurRadius: 16,
                   spreadRadius: _isFocused ? 1 : 0,
@@ -86,12 +85,12 @@ class _ScannerInputFieldState extends State<ScannerInputField>
               child: Container(
                 padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 2.h),
                 decoration: BoxDecoration(
-                  color: AppColors.white.withValues(alpha: 0.1),
+                  color: AppColors.cardBackground,
                   borderRadius: BorderRadius.circular(12.r),
                   border: Border.all(
                     color: _isFocused
-                        ? AppColors.accentTeal
-                        : AppColors.white.withValues(alpha: 0.25),
+                        ? AppColors.primaryBlue
+                        : AppColors.divider,
                     width: _isFocused ? 1.5 : 1,
                   ),
                 ),
@@ -101,12 +100,12 @@ class _ScannerInputFieldState extends State<ScannerInputField>
                     Container(
                       padding: EdgeInsets.all(8.r),
                       decoration: BoxDecoration(
-                        color: AppColors.accentTeal.withValues(alpha: 0.2),
+                        color: AppColors.primaryBlue.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8.r),
                       ),
                       child: Icon(
                         Icons.qr_code_scanner_rounded,
-                        color: AppColors.accentTeal,
+                        color: AppColors.primaryBlue,
                         size: 16.sp,
                       ),
                     ),
@@ -119,12 +118,8 @@ class _ScannerInputFieldState extends State<ScannerInputField>
                         autofocus: false,
                         readOnly: !widget.showKeyboard,
                         showCursor: true,
-                        // keyboardType: TextInputType.number,
-                        // inputFormatters: [
-                        //   FilteringTextInputFormatter.digitsOnly
-                        // ],
                         style: TextStyle(
-                          color: AppColors.white,
+                          color: AppColors.textPrimary,
                           fontSize: 10.sp,
                           fontWeight: FontWeight.w500,
                           letterSpacing: 1.5,
@@ -134,7 +129,7 @@ class _ScannerInputFieldState extends State<ScannerInputField>
                         decoration: InputDecoration(
                           hintText: 'Scan or enter barcode...',
                           hintStyle: TextStyle(
-                            color: AppColors.white.withValues(alpha: 0.5),
+                            color: AppColors.textSecondary,
                             fontSize: 8.sp,
                             fontWeight: FontWeight.w400,
                           ),
@@ -150,7 +145,7 @@ class _ScannerInputFieldState extends State<ScannerInputField>
                       Container(
                         padding: EdgeInsets.all(6.r),
                         decoration: BoxDecoration(
-                          color: AppColors.success.withValues(alpha: 0.2),
+                          color: AppColors.success.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(6.r),
                         ),
                         child: Icon(

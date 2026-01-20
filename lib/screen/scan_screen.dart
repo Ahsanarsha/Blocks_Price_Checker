@@ -7,6 +7,7 @@ import 'dart:developer';
 import 'package:blocks_guide/helpers/connection_helper.dart';
 import 'package:blocks_guide/helpers/connection_provider.dart';
 import 'package:blocks_guide/helpers/kiosk_mode_manager.dart';
+import 'package:blocks_guide/helpers/kiosk_mode_provider.dart';
 import 'package:blocks_guide/core/theme/app_theme.dart';
 import 'package:blocks_guide/widgets/widgets.dart';
 import 'package:connect_to_sql_server_directly/connect_to_sql_server_directly.dart';
@@ -71,15 +72,9 @@ class _ScanScreenState extends State<ScanScreen>
   String? _latestApkApiKeycode;
   String domainUrl = "https://apis.blocks360.net";
 
-  // Gradient colors for animated background
-  int _colorIndex = 0;
-  Color _bottomColor = AppColors.gradientSets[0][0];
-  Color _topColor = AppColors.gradientSets[0][1];
-
   // Animation controllers
   late AnimationController _bounceController;
   late Animation<double> _bounceAnimation;
-  late Timer _gradientTimer;
   late AnimationController _scaleController;
   late Animation<double> _scaleAnimation;
   late AnimationController _colorController;
@@ -188,15 +183,6 @@ class _ScanScreenState extends State<ScanScreen>
     );
     _bounceController.repeat(reverse: true);
 
-    // Gradient color transition timer
-    _gradientTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
-      setState(() {
-        _colorIndex = (_colorIndex + 1) % AppColors.gradientSets.length;
-        _bottomColor = AppColors.gradientSets[_colorIndex][0];
-        _topColor = AppColors.gradientSets[_colorIndex][1];
-      });
-    });
-
     // Scale animation for promotions
     _scaleController = AnimationController(
       duration: const Duration(seconds: 1),
@@ -240,7 +226,6 @@ class _ScanScreenState extends State<ScanScreen>
     _bounceController.dispose();
     _scaleController.dispose();
     _colorController.dispose();
-    _gradientTimer.cancel();
     _connectionCheckTimer.cancel();
     _clearProductTimer?.cancel();
     super.dispose();
@@ -1033,83 +1018,62 @@ AND CONVERT(DATE, GETDATE()) BETWEEN CONVERT(DATE, StartDate) AND CONVERT(DATE, 
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async => false,
+    return PopScope(
+      canPop: false,
       child: Scaffold(
-        backgroundColor: AppColors.primaryDark,
-        body: Stack(
+        backgroundColor: AppColors.scaffoldBackground,
+        body: Column(
           children: [
-            // Animated gradient background
-            AnimatedContainer(
-              duration: const Duration(seconds: 2),
-              curve: Curves.easeInOut,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [_topColor, _bottomColor],
-                ),
-              ),
+            // Custom App Bar
+            Consumer2<ConnectionProvider, KioskModeProvider>(
+              builder: (context, connectionProvider, kioskModeProvider, child) {
+                return CustomAppBar(
+                  title: 'Price Checker',
+                  isConnected: connectionProvider.isConnected,
+                  isKioskModeEnabled: kioskModeProvider.isKioskModeEnabled,
+                  onSettingsPressed: () {
+                    FocusScope.of(context).unfocus();
+                    KioskModeManager().showPasswordDialog(context);
+                  },
+                  onDoubleTap: _showBuildInfoDialog,
+                );
+              },
             ),
 
-            // Main content
-            SafeArea(
-              child: Column(
-                children: [
-                  // Custom App Bar
-                  Consumer<ConnectionProvider>(
-                    builder: (context, connectionProvider, child) {
-                      return CustomAppBar(
-                        title: 'Price Checker',
-                        topColor: _topColor,
-                        bottomColor: _bottomColor,
-                        isConnected: connectionProvider.isConnected,
-                        onSettingsPressed: () {
-                          FocusScope.of(context).unfocus();
-                          KioskModeManager().showPasswordDialog(context);
-                        },
-                        onDoubleTap: _showBuildInfoDialog,
-                      );
-                    },
-                  ),
-
-                  // Body content
-                  Expanded(
-                    child: Padding(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
-                      child: Column(
-                        children: [
-                          // Scanner input field
-                          ScannerInputField(
-                            controller: controller,
-                            focusNode: _focusNode,
-                            showKeyboard: _showKeyboard,
-                            onSubmitted: _handleFieldSubmitted,
-                            onKeyEvent: _handleKeyEvent,
-                            onTap: () {
-                              setState(() {
-                                _showKeyboard = true;
-                              });
-                            },
-                          ),
-                          SizedBox(height: 10.h),
-
-                          // Product display area
-                          Expanded(
-                            child: _buildProductArea(),
-                          ),
-                          SizedBox(height: 6.h),
-
-                          // Scanner hint
-                          ScannerHintWidget(
-                            bounceAnimation: _bounceAnimation,
-                          ),
-                        ],
-                      ),
+            // Body content
+            Expanded(
+              child: Padding(
+                padding:
+                    EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                child: Column(
+                  children: [
+                    // Scanner input field
+                    ScannerInputField(
+                      controller: controller,
+                      focusNode: _focusNode,
+                      showKeyboard: _showKeyboard,
+                      onSubmitted: _handleFieldSubmitted,
+                      onKeyEvent: _handleKeyEvent,
+                      onTap: () {
+                        setState(() {
+                          _showKeyboard = true;
+                        });
+                      },
                     ),
-                  ),
-                ],
+                    SizedBox(height: 10.h),
+
+                    // Product display area
+                    Expanded(
+                      child: _buildProductArea(),
+                    ),
+                    SizedBox(height: 6.h),
+
+                    // Scanner hint
+                    ScannerHintWidget(
+                      bounceAnimation: _bounceAnimation,
+                    ),
+                  ],
+                ),
               ),
             ),
           ],

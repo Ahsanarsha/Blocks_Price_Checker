@@ -21,21 +21,24 @@ class ScannerHintWidget extends StatelessWidget {
           child: Container(
             padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
             decoration: BoxDecoration(
-              color: AppColors.white.withValues(alpha: 0.1),
+              color: AppColors.primaryBlue,
               borderRadius: BorderRadius.circular(16.r),
-              border: Border.all(
-                color: AppColors.white.withValues(alpha: 0.2),
-                width: 1,
-              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // QR Code icon with glow effect
+                // QR Code icon
                 Container(
                   padding: EdgeInsets.all(8.r),
                   decoration: BoxDecoration(
-                    color: AppColors.accentTeal.withValues(alpha: 0.2),
+                    color: AppColors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(10.r),
                   ),
                   child: Image.asset(
@@ -64,7 +67,7 @@ class ScannerHintWidget extends StatelessWidget {
                     Text(
                       'Place barcode in front of scanner',
                       style: TextStyle(
-                        color: AppColors.white.withValues(alpha: 0.7),
+                        color: AppColors.white.withValues(alpha: 0.8),
                         fontSize: 5.sp,
                         fontWeight: FontWeight.w400,
                       ),

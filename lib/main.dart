@@ -1,4 +1,5 @@
 import 'package:blocks_guide/helpers/connection_provider.dart';
+import 'package:blocks_guide/helpers/kiosk_mode_provider.dart';
 // import 'package:blocks_guide/screen/fake_ui.dart';
 import 'package:blocks_guide/screen/scan_screen.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +19,7 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ConnectionProvider()),
+        ChangeNotifierProvider(create: (_) => KioskModeProvider()),
       ],
       child: ScreenUtilInit(
         designSize: const Size(1280, 752),

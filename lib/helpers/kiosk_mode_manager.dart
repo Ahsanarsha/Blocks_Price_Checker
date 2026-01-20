@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:developer';
 
 import 'package:blocks_guide/core/theme/app_theme.dart';
+import 'package:blocks_guide/helpers/kiosk_mode_provider.dart';
 import 'package:connect_to_sql_server_directly/connect_to_sql_server_directly.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -47,8 +48,7 @@ class KioskModeManager {
 
     showGeneralDialog(
       context: context,
-      barrierDismissible: false,
-      barrierColor: AppColors.primaryDark.withValues(alpha: 0.7),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       transitionDuration: const Duration(milliseconds: 300),
       pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
       transitionBuilder: (context, anim1, anim2, child) {
@@ -550,7 +550,7 @@ class KioskModeManager {
     showGeneralDialog(
       context: context,
       barrierDismissible: false,
-      barrierColor: AppColors.primaryDark.withValues(alpha: 0.7),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       transitionDuration: const Duration(milliseconds: 300),
       pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
       transitionBuilder: (context, anim1, anim2, child) {
@@ -634,6 +634,9 @@ class KioskModeManager {
                                 color: AppColors.success,
                                 onTap: () async {
                                   await startKioskMode();
+                                  Provider.of<KioskModeProvider>(context,
+                                          listen: false)
+                                      .enableKioskMode();
                                   Navigator.of(context).pop();
                                   _showModernSnackBar(
                                       context, 'Kiosk Mode Enabled',
@@ -647,6 +650,9 @@ class KioskModeManager {
                                 color: AppColors.error,
                                 onTap: () async {
                                   await stopKioskMode();
+                                  Provider.of<KioskModeProvider>(context,
+                                          listen: false)
+                                      .disableKioskMode();
                                   Navigator.of(context).pop();
                                   _showModernSnackBar(
                                       context, 'Kiosk Mode Disabled',

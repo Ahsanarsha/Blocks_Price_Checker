@@ -2,21 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:blocks_guide/core/theme/app_theme.dart';
 
-/// A modern custom app bar with gradient background
+/// A modern custom app bar with solid blue background
 class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
-  final Color topColor;
-  final Color bottomColor;
   final bool isConnected;
+  final bool isKioskModeEnabled;
   final VoidCallback onSettingsPressed;
   final VoidCallback? onDoubleTap;
 
   const CustomAppBar({
     super.key,
     required this.title,
-    required this.topColor,
-    required this.bottomColor,
     required this.isConnected,
+    this.isKioskModeEnabled = false,
     required this.onSettingsPressed,
     this.onDoubleTap,
   });
@@ -29,67 +27,64 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
     return GestureDetector(
       onDoubleTap: onDoubleTap,
       child: Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [topColor, bottomColor],
+        decoration: BoxDecoration(
+          color: AppColors.primaryBlue,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primaryBlue.withValues(alpha: 0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryDark.withValues(alpha: 0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
-          child: Row(
-            children: [
-              // Logo/Icon area
-              Container(
-                padding: EdgeInsets.all(6.r),
-                decoration: BoxDecoration(
-                  color: AppColors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10.r),
-                ),
-                child: Icon(
-                  Icons.qr_code_scanner_rounded,
-                  color: AppColors.white,
-                  size: 18.sp,
-                ),
-              ),
-              SizedBox(width: 12.w),
-
-              // Title
-              Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
+            child: Row(
+              children: [
+                // Logo/Icon area
+                Container(
+                  padding: EdgeInsets.all(6.r),
+                  decoration: BoxDecoration(
+                    color: AppColors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10.r),
+                  ),
+                  child: Icon(
+                    Icons.qr_code_scanner_rounded,
                     color: AppColors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12.sp,
-                    letterSpacing: 0.3,
+                    size: 18.sp,
                   ),
                 ),
-              ),
+                SizedBox(width: 12.w),
 
-              // Connection status indicator
-              _ConnectionIndicator(isConnected: isConnected),
-              SizedBox(width: 10.w),
+                // Title
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      color: AppColors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12.sp,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
 
-              // Settings button
-              _SettingsButton(
-                onPressed: onSettingsPressed,
-              ),
-            ],
+                // Connection status indicator
+                _ConnectionIndicator(isConnected: isConnected),
+                SizedBox(width: 10.w),
+
+                // Settings button with kiosk mode indicator
+                _SettingsButton(
+                  onPressed: onSettingsPressed,
+                  isKioskModeEnabled: isKioskModeEnabled,
+                ),
+              ],
+            ),
           ),
         ),
       ),
-    ),
     );
   }
 }
@@ -149,9 +144,11 @@ class _ConnectionIndicator extends StatelessWidget {
 
 class _SettingsButton extends StatelessWidget {
   final VoidCallback onPressed;
+  final bool isKioskModeEnabled;
 
   const _SettingsButton({
     required this.onPressed,
+    required this.isKioskModeEnabled,
   });
 
   @override
@@ -164,16 +161,20 @@ class _SettingsButton extends StatelessWidget {
         child: Container(
           padding: EdgeInsets.all(8.r),
           decoration: BoxDecoration(
-            color: AppColors.white.withValues(alpha: 0.1),
+            color: isKioskModeEnabled
+                ? AppColors.success.withValues(alpha: 0.3)
+                : AppColors.white.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(10.r),
-            border: Border.all(
-              color: AppColors.white.withValues(alpha: 0.2),
-              width: 1,
-            ),
+            border: isKioskModeEnabled
+                ? Border.all(
+                    color: AppColors.success.withValues(alpha: 0.5),
+                    width: 1.5,
+                  )
+                : null,
           ),
           child: Icon(
-            Icons.settings_rounded,
-            color: AppColors.white,
+            isKioskModeEnabled ? Icons.lock_rounded : Icons.settings_rounded,
+            color: isKioskModeEnabled ? AppColors.success : AppColors.white,
             size: 16.sp,
           ),
         ),

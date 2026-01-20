@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
-/// App color palette - Clean, modern, professional colors
+/// App color palette - Clean, modern, light theme
 class AppColors {
-  // Primary gradient colors - Clean dark blue theme
-  static const Color primaryDark = Color(0xFF0F172A);
-  static const Color primaryMedium = Color(0xFF1E293B);
-  static const Color primaryLight = Color(0xFF334155);
+  // Primary colors - Clean blue theme
+  static const Color primaryBlue = Color(0xFF0A56C4);
+  static const Color primaryDark = Color(0xFF083D8F);
+  static const Color primaryMedium = Color(0xFF0A56C4);
+  static const Color primaryLight = Color(0xFF3B7DD8);
 
-  // Accent colors - Fresh blue and teal
-  static const Color accentBlue = Color(0xFF3B82F6);
+  // Accent colors - Fresh blue tones
+  static const Color accentBlue = Color(0xFF0A56C4);
   static const Color accentTeal = Color(0xFF14B8A6);
   static const Color accentCyan = Color(0xFF06B6D4);
 
@@ -20,23 +21,15 @@ class AppColors {
   static const Color errorLight = Color(0xFFF87171);
   static const Color warning = Color(0xFFF59E0B);
 
-  // Neutral colors
+  // Neutral colors - Light theme
   static const Color white = Color(0xFFFFFFFF);
-  static const Color backgroundLight = Color(0xFFF8FAFC);
+  static const Color backgroundLight = Color(0xFFF1F5F9);
+  static const Color scaffoldBackground = Color(0xFFF8FAFC);
   static const Color cardBackground = Color(0xFFFFFFFF);
   static const Color textPrimary = Color(0xFF1E293B);
   static const Color textSecondary = Color(0xFF64748B);
   static const Color divider = Color(0xFFE2E8F0);
   static const Color shadowColor = Color(0x1A000000);
-
-  // Gradient color sets for animated background - Clean blue tones
-  static const List<List<Color>> gradientSets = [
-    [Color(0xFF0F172A), Color(0xFF1E3A5F)],
-    [Color(0xFF1E293B), Color(0xFF0F4C75)],
-    [Color(0xFF0F172A), Color(0xFF1E293B)],
-    [Color(0xFF1E3A5F), Color(0xFF0F172A)],
-    [Color(0xFF0F4C75), Color(0xFF1E293B)],
-  ];
 }
 
 /// App text styles
