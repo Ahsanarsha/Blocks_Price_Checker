@@ -145,11 +145,12 @@ class _ProductInfoSection extends StatelessWidget {
             _ProductNameBadge(name: productName),
             SizedBox(height: 6.h),
 
-            // Retail Price
+            // Retail Price - smaller when special price or mix & match exists, red only when special price exists
             _PriceDisplay(
               label: 'RETAIL PRICE',
               price: retailPrice,
-              isSpecial: false,
+              isSmall: hasSpecialPrice || hasMixMatch,
+              useRedColor: hasSpecialPrice,
             ),
 
             // Mix and Match
@@ -162,7 +163,7 @@ class _ProductInfoSection extends StatelessWidget {
               ),
             ],
 
-            // Special/Discounted Price
+            // Special/Discounted Price - larger and green (hero price)
             if (hasSpecialPrice) ...[
               SizedBox(height: 4.h),
               _SpecialPriceDisplay(
@@ -217,21 +218,33 @@ class _ProductNameBadge extends StatelessWidget {
 class _PriceDisplay extends StatelessWidget {
   final String label;
   final double price;
-  final bool isSpecial;
+  final bool isSmall;
+  final bool useRedColor;
 
   const _PriceDisplay({
     required this.label,
     required this.price,
-    required this.isSpecial,
+    this.isSmall = false,
+    this.useRedColor = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    // When special price exists: retail becomes smaller and red
+    // When no special price: retail is larger and green
+    final decoration = useRedColor
+        ? AppDecorations.specialPriceDecoration  // Red color
+        : AppDecorations.priceTagDecoration;     // Green color
+
+    final dollarSize = isSmall ? 10.sp : 14.sp;
+    final priceSize = isSmall ? 14.sp : 22.sp;
+    final horizontalPadding = isSmall ? 12.w : 18.w;
+    final verticalPadding = isSmall ? 6.h : 10.h;
+    final labelSize = isSmall ? 5.sp : 6.sp;
+
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 18.w, vertical: 10.h),
-      decoration: isSpecial
-          ? AppDecorations.specialPriceDecoration
-          : AppDecorations.priceTagDecoration,
+      padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
+      decoration: decoration,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -239,7 +252,7 @@ class _PriceDisplay extends StatelessWidget {
             label,
             style: TextStyle(
               color: AppColors.white.withValues(alpha: 0.9),
-              fontSize: 6.sp,
+              fontSize: labelSize,
               fontWeight: FontWeight.w600,
               letterSpacing: 1.2,
             ),
@@ -254,7 +267,7 @@ class _PriceDisplay extends StatelessWidget {
                 '\$',
                 style: TextStyle(
                   color: AppColors.white,
-                  fontSize: 14.sp,
+                  fontSize: dollarSize,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -262,7 +275,7 @@ class _PriceDisplay extends StatelessWidget {
                 price.toStringAsFixed(2),
                 style: TextStyle(
                   color: AppColors.white,
-                  fontSize: 22.sp,
+                  fontSize: priceSize,
                   fontWeight: FontWeight.bold,
                   letterSpacing: -0.5,
                 ),
@@ -297,7 +310,7 @@ class _MixMatchBadge extends StatelessWidget {
             animation: colorAnimation,
             builder: (context, child) {
               return Container(
-                padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
+                padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
@@ -306,13 +319,13 @@ class _MixMatchBadge extends StatelessWidget {
                           .withValues(alpha: 0.7),
                     ],
                   ),
-                  borderRadius: BorderRadius.circular(10.r),
+                  borderRadius: BorderRadius.circular(12.r),
                   boxShadow: [
                     BoxShadow(
                       color: (colorAnimation.value ?? AppColors.success)
                           .withValues(alpha: 0.35),
-                      blurRadius: 8,
-                      spreadRadius: 1,
+                      blurRadius: 10,
+                      spreadRadius: 2,
                     ),
                   ],
                 ),
@@ -322,19 +335,19 @@ class _MixMatchBadge extends StatelessWidget {
                     Icon(
                       Icons.local_offer_rounded,
                       color: AppColors.white,
-                      size: 10.sp,
+                      size: 14.sp,
                     ),
-                    SizedBox(width: 5.w),
+                    SizedBox(width: 6.w),
                     Flexible(
                       child: Text(
                         text,
                         style: TextStyle(
                           color: AppColors.white,
-                          fontSize: 7.sp,
+                          fontSize: 10.sp,
                           fontWeight: FontWeight.bold,
                         ),
                         textAlign: TextAlign.center,
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -368,8 +381,8 @@ class _SpecialPriceDisplay extends StatelessWidget {
         return Transform.scale(
           scale: 0.92 + (scaleAnimation.value * 0.08),
           child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 8.h),
-            decoration: AppDecorations.specialPriceDecoration,
+            padding: EdgeInsets.symmetric(horizontal: 18.w, vertical: 10.h),
+            decoration: AppDecorations.priceTagDecoration, // Green color - this is the hero price
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -379,16 +392,16 @@ class _SpecialPriceDisplay extends StatelessWidget {
                     Icon(
                       Icons.discount_rounded,
                       color: AppColors.white,
-                      size: 9.sp,
+                      size: 10.sp,
                     ),
                     SizedBox(width: 4.w),
                     Text(
                       'SPECIAL PRICE',
                       style: TextStyle(
                         color: AppColors.white.withValues(alpha: 0.9),
-                        fontSize: 5.sp,
+                        fontSize: 6.sp,
                         fontWeight: FontWeight.w600,
-                        letterSpacing: 1,
+                        letterSpacing: 1.2,
                       ),
                     ),
                   ],
@@ -403,7 +416,7 @@ class _SpecialPriceDisplay extends StatelessWidget {
                       '\$',
                       style: TextStyle(
                         color: AppColors.white,
-                        fontSize: 12.sp,
+                        fontSize: 14.sp,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -411,9 +424,9 @@ class _SpecialPriceDisplay extends StatelessWidget {
                       price.toStringAsFixed(2),
                       style: TextStyle(
                         color: AppColors.white,
-                        fontSize: 16.sp,
+                        fontSize: 22.sp,
                         fontWeight: FontWeight.bold,
-                        letterSpacing: -0.3,
+                        letterSpacing: -0.5,
                       ),
                     ),
                   ],

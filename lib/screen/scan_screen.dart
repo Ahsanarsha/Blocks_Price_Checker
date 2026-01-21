@@ -66,8 +66,8 @@ class _ScanScreenState extends State<ScanScreen>
   String _scanBuffer = '';
 
   // Current app build number - update this when releasing new versions
-  static const int _currentBuildNumber = 10;
-  static const String _currentVersionNumber = "1.1.8";
+  static const int _currentBuildNumber = 11;
+  static const String _currentVersionNumber = "1.1.9";
 
   String? _latestApkApiKeycode;
   String domainUrl = "https://apis.blocks360.net";
