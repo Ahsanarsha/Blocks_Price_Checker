@@ -5,7 +5,7 @@ import 'dart:developer';
 
 import 'package:blocks_guide/core/theme/app_theme.dart';
 import 'package:blocks_guide/helpers/kiosk_mode_provider.dart';
-import 'package:connect_to_sql_server_directly/connect_to_sql_server_directly.dart';
+import 'package:blocks_guide/helpers/sql_server_connection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -230,7 +230,7 @@ class KioskModeManager {
   }
 
   Future<void> showDatabasePopup(BuildContext context) async {
-    final sqlConnection = ConnectToSqlServerDirectly();
+    final sqlConnection = SqlServerConnection();
     bool connect = false;
 
     TextEditingController serverController = TextEditingController();

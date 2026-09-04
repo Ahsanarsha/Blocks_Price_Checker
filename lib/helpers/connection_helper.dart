@@ -3,7 +3,7 @@
 import 'dart:developer';
 
 import 'package:blocks_guide/helpers/connection_provider.dart';
-import 'package:connect_to_sql_server_directly/connect_to_sql_server_directly.dart';
+import 'package:blocks_guide/helpers/sql_server_connection.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -35,7 +35,7 @@ class ConnectionHelper {
       final password = prefs.getString('password')!;
 
       try {
-        final sqlConnection = ConnectToSqlServerDirectly();
+        final sqlConnection = SqlServerConnection();
 
         // First initialize connection
         bool connected = await sqlConnection.initializeConnection(
@@ -80,13 +80,10 @@ class ConnectionHelper {
 
   // check internet connectivity
   Future<bool> checkConnectivity() async {
-    var connectivityResult = await (Connectivity().checkConnectivity());
-    if (connectivityResult == ConnectivityResult.mobile ||
-        connectivityResult == ConnectivityResult.wifi ||
-        connectivityResult == ConnectivityResult.ethernet) {
-      return true;
-    } else {
-      return false;
-    }
+    // connectivity_plus 6+ reports a list of active transports.
+    final connectivityResult = await Connectivity().checkConnectivity();
+    return connectivityResult.contains(ConnectivityResult.mobile) ||
+        connectivityResult.contains(ConnectivityResult.wifi) ||
+        connectivityResult.contains(ConnectivityResult.ethernet);
   }
 }

@@ -8,9 +8,9 @@ import 'package:blocks_guide/helpers/connection_helper.dart';
 import 'package:blocks_guide/helpers/connection_provider.dart';
 import 'package:blocks_guide/helpers/kiosk_mode_manager.dart';
 import 'package:blocks_guide/helpers/kiosk_mode_provider.dart';
+import 'package:blocks_guide/helpers/sql_server_connection.dart';
 import 'package:blocks_guide/core/theme/app_theme.dart';
 import 'package:blocks_guide/widgets/widgets.dart';
-import 'package:connect_to_sql_server_directly/connect_to_sql_server_directly.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -61,13 +61,13 @@ class _ScanScreenState extends State<ScanScreen>
   bool isLoading = false;
   final FocusNode _focusNode = FocusNode();
   TextEditingController controller = TextEditingController();
-  final _sqlConnection = ConnectToSqlServerDirectly();
+  final _sqlConnection = SqlServerConnection();
   Uint8List? imageBytes;
   bool _showKeyboard = false;
   String _scanBuffer = '';
 
   // Current app build number - update this when releasing new versions
-  static const int _currentBuildNumber = 12;
+  static const int _currentBuildNumber = 13;
   static const String _currentVersionNumber = "1.1.10";
 
   String? _latestApkApiKeycode;
@@ -623,7 +623,8 @@ class _ScanScreenState extends State<ScanScreen>
   Future<void> _redirectToPlayStoreListing() async {
     const String packageName = 'com.eratech.blocks_price_check';
     final Uri playStoreUri = Uri.parse('market://details?id=$packageName');
-    final Uri playStoreWebUri = Uri.parse('https://play.google.com/store/apps/details?id=$packageName');
+    final Uri playStoreWebUri =
+        Uri.parse('https://play.google.com/store/apps/details?id=$packageName');
 
     try {
       // Try to open Play Store app first
@@ -753,10 +754,10 @@ class _ScanScreenState extends State<ScanScreen>
   }
 
   Future<void> _fetchProductWithVersionCheck(String text) async {
-    // final isVersionValid = await 
+    // final isVersionValid = await
     _checkAppVersion();
     // if (isVersionValid) {
-      getProductsTableData(text);
+    getProductsTableData(text);
     // }
   }
 
@@ -776,8 +777,9 @@ class _ScanScreenState extends State<ScanScreen>
     log('Product list empty: ${productList.isEmpty}');
     log('Scanned text: $text');
 
-    var connectivityResult = await (Connectivity().checkConnectivity());
-    if (connectivityResult == ConnectivityResult.none) {
+    // connectivity_plus 6+ reports a list; [none] means no network at all.
+    final connectivityResult = await Connectivity().checkConnectivity();
+    if (connectivityResult.contains(ConnectivityResult.none)) {
       _showCustomSnackBar('No internet connection. Please check your network.');
       setState(() {
         isLoading = false;
@@ -1077,8 +1079,7 @@ AND CONVERT(DATE, GETDATE()) BETWEEN CONVERT(DATE, StartDate) AND CONVERT(DATE, 
             // Body content
             Expanded(
               child: Padding(
-                padding:
-                    EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
                 child: Column(
                   children: [
                     // Scanner input field

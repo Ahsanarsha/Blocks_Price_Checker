@@ -1,9 +1,11 @@
 import java.util.Properties
 import java.io.FileInputStream
+import java.net.URI
 
 plugins {
     id("com.android.application")
-    id("kotlin-android")
+    // Kotlin is applied by the Flutter Gradle plugin; applying it here too is
+    // deprecated (see the Flutter built-in Kotlin migration guide).
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -14,18 +16,49 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// mssql_connection (Dart FFI + FreeTDS) ships prebuilt native libraries in
+// <package>/android/src/main/jniLibs, but it is a plain Dart package rather than
+// a Flutter plugin, so the Flutter Gradle plugin does not package them. Resolve
+// the package location from the Dart package config and add its jniLibs
+// directory to this module so libsybdb.so / libct.so end up in the APK/AAB.
+val mssqlConnectionJniLibs: File = run {
+    val packageConfig = rootProject.file("../.dart_tool/package_config.json")
+    if (!packageConfig.exists()) {
+        throw GradleException(
+            "mssql_connection: ${packageConfig.path} not found. Run `flutter pub get` first."
+        )
+    }
+    @Suppress("UNCHECKED_CAST")
+    val packages = (groovy.json.JsonSlurper().parseText(packageConfig.readText())
+        as Map<String, Any?>)["packages"] as List<Map<String, Any?>>
+    val pkg = packages.firstOrNull { it["name"] == "mssql_connection" }
+        ?: throw GradleException(
+            "mssql_connection: package not listed in ${packageConfig.path}. Run `flutter pub get`."
+        )
+    val rootUri = URI(pkg["rootUri"] as String)
+    val rootDir = if (rootUri.isAbsolute) {
+        File(rootUri)
+    } else {
+        File(packageConfig.parentFile, rootUri.path).canonicalFile
+    }
+    val jniLibs = File(rootDir, "android/src/main/jniLibs")
+    if (!jniLibs.isDirectory) {
+        throw GradleException("mssql_connection: native libraries not found at ${jniLibs.path}.")
+    }
+    jniLibs
+}
+
 android {
     namespace = "com.eratech.blocks_price_check"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = "27.0.12077973"
+    // permission_handler_android 14.x compiles against SDK 37 (installed as
+    // platform "android-37.0", which needs AGP 9+ to resolve).
+    compileSdk = 37
+    // Flutter's default (28.2.13676358), which the upgraded plugins expect.
+    ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     defaultConfig {
@@ -38,6 +71,13 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
+    }
+
+    sourceSets {
+        getByName("main") {
+            // FreeTDS libraries used by the mssql_connection package (see above).
+            jniLibs.srcDir(mssqlConnectionJniLibs)
+        }
     }
 
     signingConfigs {
@@ -55,6 +95,12 @@ android {
             isMinifyEnabled = false
             isShrinkResources = false
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
 
