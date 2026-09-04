@@ -21,6 +21,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
 
 class ScanScreen extends StatefulWidget {
@@ -66,10 +67,11 @@ class _ScanScreenState extends State<ScanScreen>
   String _scanBuffer = '';
 
   // Current app build number - update this when releasing new versions
-  static const int _currentBuildNumber = 11;
-  static const String _currentVersionNumber = "1.1.9";
+  static const int _currentBuildNumber = 12;
+  static const String _currentVersionNumber = "1.1.10";
 
   String? _latestApkApiKeycode;
+  bool _isForPlayStore = false;
   String domainUrl = "https://apis.blocks360.net";
 
   // Animation controllers
@@ -263,6 +265,7 @@ class _ScanScreenState extends State<ScanScreen>
           _latestApkApiKeycode = data['data']['keycode'];
 
           log('Server build number: $serverBuildNumber, Current build number: $_currentBuildNumber');
+          log('Is for Play Store: $_isForPlayStore');
 
           if (serverBuildNumber > _currentBuildNumber) {
             _showUpdateRequiredModal();
@@ -617,6 +620,33 @@ class _ScanScreenState extends State<ScanScreen>
     }
   }
 
+  Future<void> _redirectToPlayStoreListing() async {
+    const String packageName = 'com.eratech.blocks_price_check';
+    final Uri playStoreUri = Uri.parse('market://details?id=$packageName');
+    final Uri playStoreWebUri = Uri.parse('https://play.google.com/store/apps/details?id=$packageName');
+
+    try {
+      // Try to open Play Store app first
+      if (await canLaunchUrl(playStoreUri)) {
+        await launchUrl(playStoreUri, mode: LaunchMode.externalApplication);
+      } else if (await canLaunchUrl(playStoreWebUri)) {
+        // Fallback to web browser if Play Store app is not available
+        await launchUrl(playStoreWebUri, mode: LaunchMode.externalApplication);
+      } else {
+        _showErrorDialog(
+          'Update Error',
+          'Could not open Play Store. Please update the app manually from the Play Store.',
+        );
+      }
+    } catch (e) {
+      log('Error opening Play Store: $e');
+      _showErrorDialog(
+        'Update Error',
+        'An error occurred while opening the Play Store: $e',
+      );
+    }
+  }
+
   void _showUpdateRequiredModal() {
     showModalBottomSheet(
       context: context,
@@ -698,7 +728,11 @@ class _ScanScreenState extends State<ScanScreen>
                       ),
                       onPressed: () {
                         Navigator.pop(context);
-                        _downloadAndInstallApk();
+                        if (_isForPlayStore) {
+                          _redirectToPlayStoreListing();
+                        } else {
+                          _downloadAndInstallApk();
+                        }
                       },
                       child: Text(
                         'Update Now',
