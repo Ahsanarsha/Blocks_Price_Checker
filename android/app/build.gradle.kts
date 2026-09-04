@@ -1,6 +1,5 @@
 import java.util.Properties
 import java.io.FileInputStream
-import java.net.URI
 
 plugins {
     id("com.android.application")
@@ -16,37 +15,11 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
-// mssql_connection (Dart FFI + FreeTDS) ships prebuilt native libraries in
-// <package>/android/src/main/jniLibs, but it is a plain Dart package rather than
-// a Flutter plugin, so the Flutter Gradle plugin does not package them. Resolve
-// the package location from the Dart package config and add its jniLibs
-// directory to this module so libsybdb.so / libct.so end up in the APK/AAB.
-val mssqlConnectionJniLibs: File = run {
-    val packageConfig = rootProject.file("../.dart_tool/package_config.json")
-    if (!packageConfig.exists()) {
-        throw GradleException(
-            "mssql_connection: ${packageConfig.path} not found. Run `flutter pub get` first."
-        )
-    }
-    @Suppress("UNCHECKED_CAST")
-    val packages = (groovy.json.JsonSlurper().parseText(packageConfig.readText())
-        as Map<String, Any?>)["packages"] as List<Map<String, Any?>>
-    val pkg = packages.firstOrNull { it["name"] == "mssql_connection" }
-        ?: throw GradleException(
-            "mssql_connection: package not listed in ${packageConfig.path}. Run `flutter pub get`."
-        )
-    val rootUri = URI(pkg["rootUri"] as String)
-    val rootDir = if (rootUri.isAbsolute) {
-        File(rootUri)
-    } else {
-        File(packageConfig.parentFile, rootUri.path).canonicalFile
-    }
-    val jniLibs = File(rootDir, "android/src/main/jniLibs")
-    if (!jniLibs.isDirectory) {
-        throw GradleException("mssql_connection: native libraries not found at ${jniLibs.path}.")
-    }
-    jniLibs
-}
+// SQL Server access uses the mssql_connection package (Dart FFI + FreeTDS).
+// It is a plain Dart package, not a Flutter plugin, so its native libraries are
+// not packaged automatically, and the copies it ships are only 4 KB aligned.
+// The app therefore carries its own 16 KB-aligned builds of libsybdb.so and
+// libct.so in src/main/jniLibs/<abi>/, produced by tool/build_freetds_android.sh.
 
 android {
     namespace = "com.eratech.blocks_price_check"
@@ -71,13 +44,6 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
-    }
-
-    sourceSets {
-        getByName("main") {
-            // FreeTDS libraries used by the mssql_connection package (see above).
-            jniLibs.srcDir(mssqlConnectionJniLibs)
-        }
     }
 
     signingConfigs {
