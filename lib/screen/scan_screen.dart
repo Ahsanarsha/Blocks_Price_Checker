@@ -67,12 +67,13 @@ class _ScanScreenState extends State<ScanScreen>
   String _scanBuffer = '';
 
   // Current app build number - update this when releasing new versions
-  static const int _currentBuildNumber = 13;
+  static const int _currentBuildNumber = 14;
   static const String _currentVersionNumber = "1.1.10";
 
   String? _latestApkApiKeycode;
-  bool _isForPlayStore = false;
+  final bool _isForPlayStore = true;
   String domainUrl = "https://apis.blocks360.net";
+  // String domainUrl = "https://developers.blocks360.net";
 
   // Animation controllers
   late AnimationController _bounceController;
